@@ -1,0 +1,353 @@
+/* Custom styles for Arabic fonts */
+@import url('https://fonts.googleapis.com/css2?family=Naskh:wght@400;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* RTL Support */
+[dir="rtl"] {
+  font-family: 'Naskh', serif;
+}
+
+/* Custom component styles */
+@layer components {
+  .btn-primary {
+    @apply bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+  }
+  
+  .btn-secondary {
+    @apply bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+  }
+  
+  .btn-success {
+    @apply bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+  }
+  
+  .btn-danger {
+    @apply bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+  }
+  
+  .card {
+    @apply bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700;
+  }
+  
+  .input-field {
+    @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100;
+  }
+}
+
+/* Custom utilities */
+@layer utilities {
+  .text-gradient {
+    @apply bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent;
+  }
+  
+  .shadow-glow {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+  }
+  
+  /* Professional paper-like background pattern with warm orange base */
+  .bg-pattern-minimal {
+    background-color: #FFF5EE; /* Warm seashell/cream tone */
+    background-image: 
+      /* Horizontal paper lines */
+      repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 19px,
+        rgba(139,69,19,0.025) 19px,
+        rgba(139,69,19,0.025) 20px
+      ),
+      /* Vertical paper lines - very subtle */
+      repeating-linear-gradient(
+        90deg,
+        transparent,
+        transparent 29px,
+        rgba(139,69,19,0.015) 29px,
+        rgba(139,69,19,0.015) 30px
+      ),
+      /* Small dots for texture */
+      radial-gradient(circle at 1px 1px, rgba(255,140,0,0.03) 1px, transparent 0),
+      /* Large subtle glow */
+      radial-gradient(circle at 50% 50%, rgba(255,165,0,0.004) 0%, transparent 70%);
+    background-size: 100% 20px, 30px 100%, 18px 18px, 120px 120px;
+    background-position: 0 0, 0 0, 0 0, 0 0;
+  }
+  
+  /* Dark mode version with warm dark tone */
+  .dark .bg-pattern-minimal {
+    background-color: #1C1510; /* Warm dark brown */
+    background-image: 
+      /* Horizontal paper lines for dark mode */
+      repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 19px,
+        rgba(255,140,0,0.04) 19px,
+        rgba(255,140,0,0.04) 20px
+      ),
+      /* Vertical paper lines - very subtle */
+      repeating-linear-gradient(
+        90deg,
+        transparent,
+        transparent 29px,
+        rgba(255,140,0,0.02) 29px,
+        rgba(255,140,0,0.02) 30px
+      ),
+      /* Small dots for texture */
+      radial-gradient(circle at 1px 1px, rgba(255,140,0,0.06) 1px, transparent 0),
+      /* Large subtle glow */
+      radial-gradient(circle at 50% 50%, rgba(255,165,0,0.008) 0%, transparent 70%);
+    background-size: 100% 20px, 30px 100%, 18px 18px, 120px 120px;
+    background-position: 0 0, 0 0, 0 0, 0 0;
+  }
+  
+  /* Beautiful animations for login page */
+  .animate-fade-in-down {
+    animation: fadeInDown 0.8s ease-out;
+  }
+  
+  .animate-fade-in-scale-up {
+    animation: fadeInScaleUp 1.2s ease-out;
+  }
+  
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+  
+  @keyframes fadeInDown {
+    from {
+      opacity: 0;
+      transform: translate3d(0, -100%, 0);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+  
+  @keyframes fadeInScaleUp {
+    from {
+      opacity: 0;
+      transform: scale(0.8) translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+  
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0px);
+    }
+    50% {
+      transform: translateY(-20px);
+    }
+  }
+  
+  /* Glass morphism effects */
+  .glass-effect {
+    backdrop-filter: blur(16px);
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  
+  /* Beautiful gradient overlays */
+  .gradient-overlay {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.8) 0%, rgba(147, 51, 234, 0.7) 50%, rgba(249, 115, 22, 0.8) 100%);
+  }
+}
+
+/* Enhanced Scrollbar Styles */
+@layer base {
+  /* Webkit browsers (Chrome, Safari, Edge) */
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-track {
+    @apply bg-gray-200 dark:bg-gray-800 rounded-lg;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply bg-gray-400 dark:bg-gray-600 rounded-lg;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-500 dark:bg-gray-500;
+  }
+  
+  /* Enhanced horizontal scrollbar - always visible and easy to drag */
+  .scrollbar-horizontal::-webkit-scrollbar {
+    width: 14px;
+    height: 14px;
+  }
+  
+  .scrollbar-horizontal::-webkit-scrollbar-track {
+    @apply bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600;
+    border-radius: 8px;
+  }
+  
+  .scrollbar-horizontal::-webkit-scrollbar-thumb {
+    @apply bg-blue-500 dark:bg-blue-600;
+    border-radius: 8px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+    min-height: 30px;
+    min-width: 30px;
+  }
+  
+  .scrollbar-horizontal::-webkit-scrollbar-thumb:hover {
+    @apply bg-blue-600 dark:bg-blue-500;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+  }
+  
+  .scrollbar-horizontal::-webkit-scrollbar-thumb:active {
+    @apply bg-blue-700 dark:bg-blue-400;
+  }
+  
+  /* Corner styling when both scrollbars are present */
+  .scrollbar-horizontal::-webkit-scrollbar-corner {
+    @apply bg-gray-100 dark:bg-gray-700;
+  }
+  
+  /* Blue themed scrollbars for forms */
+  .scrollbar-thumb-blue-400::-webkit-scrollbar-thumb {
+    @apply bg-blue-400 dark:bg-blue-600 rounded-lg;
+  }
+  
+  .scrollbar-thumb-blue-400::-webkit-scrollbar-thumb:hover {
+    @apply bg-blue-500 dark:bg-blue-500;
+  }
+  
+  /* Firefox */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(156, 163, 175) rgb(229, 231, 235);
+  }
+  
+  .scrollbar-horizontal {
+    scrollbar-width: auto;
+    scrollbar-color: rgb(59, 130, 246) rgb(243, 244, 246);
+  }
+
+  /* RTL (Arabic) support for horizontal scrolling */
+  [dir="rtl"] .scrollbar-horizontal {
+    direction: ltr;
+  }
+
+  [dir="rtl"] .scrollbar-horizontal::-webkit-scrollbar-thumb {
+    direction: ltr;
+  }
+
+  /* Ensure table scrolling works in RTL */
+  [dir="rtl"] .table-scroll-container {
+    direction: ltr;
+  }
+
+  [dir="rtl"] .table-scroll-container table {
+    direction: rtl;
+  }
+  
+  .dark .scrollbar-thin {
+    scrollbar-color: rgb(75, 85, 99) rgb(31, 41, 55);
+  }
+  
+  .dark .scrollbar-horizontal {
+    scrollbar-color: rgb(37, 99, 235) rgb(55, 65, 81);
+  }
+  
+  /* Smooth scrolling for better UX */
+  .smooth-scroll {
+    scroll-behavior: smooth;
+  }
+  
+  /* Better scroll positioning - always show scrollbar */
+  .scroll-visible {
+    overflow-y: scroll !important;
+  }
+  
+  /* Always show horizontal scrollbar */
+  .scroll-x-visible {
+    overflow-x: scroll !important;
+  }
+  
+  /* Custom scroll area with better positioning */
+  .scroll-area {
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .scroll-content {
+    height: 100%;
+    overflow-y: auto;
+    padding-right: 10px;
+    margin-right: -10px;
+  }
+  
+  /* Table container with enhanced horizontal scrolling */
+  .table-scroll-container {
+    position: relative;
+    overflow: hidden;
+    padding-bottom: 20px;
+    margin-bottom: -16px;
+  }
+  
+  /* Main table content with vertical scroll only */
+  .table-content {
+    overflow-y: auto;
+    overflow-x: hidden;
+    max-height: 70vh;
+  }
+  
+  /* Horizontal scroll wrapper - always visible and frozen */
+  .horizontal-scroll-wrapper {
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid rgba(229, 231, 235, 0.8);
+    padding: 8px 0;
+    margin-top: 4px;
+    overflow-x: auto;
+  }
+  
+  .dark .horizontal-scroll-wrapper {
+    background: rgba(31, 41, 55, 0.95);
+    border-top-color: rgba(75, 85, 99, 0.8);
+  }
+  
+  /* Horizontal scrollable area */
+  .horizontal-scroll-area {
+    overflow-x: auto;
+    overflow-y: hidden;
+    height: 20px;
+    width: 100%;
+  }
+  
+  /* Invisible content to create scrollbar width */
+  .horizontal-scroll-content {
+    height: 1px;
+    background: transparent;
+  }
+  
+  /* Sticky horizontal scrollbar */
+  .sticky-horizontal-scroll {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(4px);
+    padding: 4px 0;
+    border-top: 1px solid rgba(229, 231, 235, 0.8);
+  }
+  
+  .dark .sticky-horizontal-scroll {
+    background: rgba(31, 41, 55, 0.9);
+    border-top-color: rgba(75, 85, 99, 0.8);
+  }
+}

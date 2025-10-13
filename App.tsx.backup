@@ -1,0 +1,843 @@
+
+
+
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import Sidebar from './components/Sidebar';
+import AddDriverForm from './components/AddDriverForm';
+import ViewDriversPage from './components/ViewDriversPage';
+import AddVehicleForm from './components/AddVehicleForm';
+import ViewVehiclesPage from './components/ViewVehiclesPage';
+import Dashboard from './components/Dashboard';
+import VehicleDetailsPage from './components/VehicleDetailsPage';
+import SettingsPage from './components/SettingsPage';
+import ReportIncidentFo    await fb.resetUserPassword(userEmail, newPassword);
+    console.log('Password updated successfully');rom './com    // Bulk password update not available in current Firebase service
+    console.log('Bulk password update feature not implemented');ts/ReportIncidentForm';
+import ReportsPage from './components/ReportsPage';
+import AuthPage from './components/auth/AuthPage';
+import WelcomePage from './components/auth/WelcomePage';
+import AdminDashboard from './components/AdminDashboard';
+import Header from './components/ui/Header';
+import TopBar from './components/ui/TopBar';
+import TransferVehiclePage from './components/TransferVehiclePage';
+import AddSupervisorPage from './components/AddSupervisorPage';
+import SupervisorOverviewPage from './components/SupervisorOverviewPage';
+import AddProjectOfficersPage from './components/AddProjectOfficersPage';
+import ViewProjectOfficersPage from './components/ViewProjectOfficersPage';
+import AdminAllProjectsPage from './components/AdminAllProjectsPage';
+import AdminAllVehiclesPage from './components/AdminAllVehiclesPage';
+import AdminAllIncidentsPage from './components/AdminAllIncidentsPage';
+import AdminTransferLogPage from './components/AdminTransferLogPage';
+// FIX: Imported the 'Foreman' type to resolve a compilation error.
+import type { Language, Theme, Page, ProjectData, Vehicle, Driver, User, Incident, Transfer, Supervisor, Foreman, ProjectOfficer, AdminNotification, VehicleStatus } from './types';
+import * as fb from './firebase/service';
+import { TRANSLATIONS } from './constants';
+import { readExcelFile } from './utils/export';
+
+const initialProjectData: ProjectData = {
+    vehicles: [],
+    drivers: [],
+    incidents: [],
+    transfers: [],
+    supervisors: [],
+    notifications: [],
+    projectOfficers: [],
+    campLabour: 0,
+    crewman: 0,
+};
+
+const App: React.FC = () => {
+  const [currentPage, setCurrentPage] = useState<Page>('dashboard');
+  const [lang, setLang] = useState<Language>('en');
+  const [theme, setTheme] = useState<Theme>('light');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // --- Auth & Loading State ---
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [showWelcome, setShowWelcome] = useState(false);
+  
+  // --- Data State ---
+  const [projectData, setProjectData] = useState<ProjectData>(initialProjectData);
+  const [allVehicles, setAllVehicles] = useState<Vehicle[]>([]); // For non-admin vehicle lookups
+  
+  // --- Admin State ---
+  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [allProjectData, setAllProjectData] = useState<Record<string, ProjectData>>({});
+  const [allTransfers, setAllTransfers] = useState<Transfer[]>([]);
+  const [allAdminNotifications, setAllAdminNotifications] = useState<AdminNotification[]>([]);
+  const [viewingProjectAsAdmin, setViewingProjectAsAdmin] = useState<User | null>(null);
+  
+  // --- Single-Item State ---
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
+  const [editingSupervisorData, setEditingSupervisorData] = useState<Supervisor | null>(null);
+
+  const t = TRANSLATIONS[lang];
+
+  const fetchDataForCurrentUser = useCallback(async (uid: string) => {
+    const data = await fb.getProjectDataForUser(uid);
+    setProjectData(data);
+    
+    // Sync vehicle statuses with incidents (one-time fix for existing data)
+    try {
+      await fb.syncVehicleStatusesWithIncidents(uid);
+      console.log('✅ Vehicle statuses synced with incidents');
+    } catch (error) {
+      console.warn('⚠️ Failed to sync vehicle statuses:', error);
+    }
+  }, []);
+
+  const fetchDataForAdmin = useCallback(async () => {
+    try {
+        console.log('🔧 Fetching admin data...');
+        
+        // Check if we're in offline mode (no internet or Firebase errors)
+        let isOfflineMode = false;
+        
+        try {
+            const users = await fb.getAllUsers();
+            setAllUsers(users);
+            
+            const { vehicles, drivers, incidents, transfers, supervisors, projectMetadata, notifications, projectOfficers } = await fb.getAllProjectData();
+            setAllTransfers(transfers);
+            setAllAdminNotifications(notifications);
+            
+            console.log('🔧 Admin data fetched from Firebase:', {
+                usersCount: users?.length || 0,
+                vehiclesCount: vehicles?.length || 0,
+                projectMetadata: projectMetadata ? 'Available' : 'Missing'
+            });
+            
+            const structuredData: Record<string, ProjectData> = {};
+
+            users.forEach(u => {
+                if (u && u.uid) {
+                    const userTransfers = transfers.filter(t => t.fromUserId === u.uid || t.toUserId === u.uid);
+                    const userTransferIds = new Set(userTransfers.map(t => t.id));
+                    
+                    // Safe access to projectMetadata
+                    const userMetadata = projectMetadata?.[u.uid];
+                    
+                    structuredData[u.email] = {
+                        vehicles: vehicles.filter(v => v.userId === u.uid),
+                        drivers: drivers.filter(d => d.userId === u.uid),
+                        incidents: incidents.filter(i => i.userId === u.uid),
+                        transfers: userTransfers,
+                        supervisors: supervisors.filter(s => s.userId === u.uid),
+                        notifications: notifications.filter(n => userTransferIds.has(n.transferId)),
+                        projectOfficers: (projectOfficers || []).filter(o => o.userId === u.uid),
+                        campLabour: userMetadata?.campLabour || 0,
+                        crewman: userMetadata?.crewman || 0,
+                    };
+                }
+            });
+            setAllProjectData(structuredData);
+            
+        } catch (firebaseError) {
+            console.warn('🔄 Firebase error, using offline mock data:', firebaseError);
+            isOfflineMode = true;
+        }
+        
+        // If offline mode or Firebase failed, use mock data
+        if (isOfflineMode || currentUser?.email === 'zahran@projects.reports') {
+            console.log('📋 Loading mock data for offline admin mode...');
+            
+            // Import and use mock data from constants
+            const { MOCK_USERS, MOCK_PROJECT_DATA } = await import('./constants');
+            
+            // Deduplicate users to avoid React key warnings
+            const uniqueUsers = MOCK_USERS.filter((user, index, self) => 
+                index === self.findIndex(u => u.email === user.email)
+            );
+            
+            setAllUsers(uniqueUsers);
+            
+            // Create structured mock data
+            const mockStructuredData: Record<string, ProjectData> = {};
+            uniqueUsers.forEach(user => {
+                if (user.email && MOCK_PROJECT_DATA[user.uid]) {
+                    const mockData = MOCK_PROJECT_DATA[user.uid];
+                    mockStructuredData[user.email] = {
+                        ...mockData,
+                        supervisors: [],
+                        notifications: [],
+                        projectOfficers: [],
+                        campLabour: 0,
+                        crewman: 0
+                    };
+                }
+            });
+            
+            setAllProjectData(mockStructuredData);
+            setAllTransfers([]); // Mock transfers if needed
+            setAllAdminNotifications([]); // Mock notifications if needed
+            
+            console.log('✅ Mock data loaded for offline admin mode');
+        }
+        
+    } catch (error) {
+        console.error('❌ Error in fetchDataForAdmin:', error);
+        
+        // Final fallback - empty data structure
+        setAllUsers([]);
+        setAllProjectData({});
+        setAllTransfers([]);
+        setAllAdminNotifications([]);
+    }
+  }, []); // Remove currentUser dependency to prevent infinite loop
+
+  // --- Effects ---
+  useEffect(() => {
+    fb.initializeDB();
+
+    // Check for offline admin session first
+    const offlineAdminUser = localStorage.getItem('offlineAdminUser');
+    if (offlineAdminUser) {
+      try {
+        const adminUser = JSON.parse(offlineAdminUser) as User;
+        console.log('🔄 Restoring offline admin session:', adminUser.email);
+        setCurrentUser(adminUser);
+        setCurrentPage('adminDashboard');
+        
+        // Fetch admin data without causing infinite loop
+        setTimeout(async () => {
+          try {
+            await fetchDataForAdmin();
+          } catch (error) {
+            console.error('Error fetching admin data on restore:', error);
+          }
+        }, 100);
+        
+        setIsLoading(false);
+        return; // Don't continue with Firebase auth check
+      } catch (error) {
+        console.error('Error restoring admin session:', error);
+        localStorage.removeItem('offlineAdminUser');
+      }
+    }
+
+    const preferredLang = localStorage.getItem('preferredLanguage') as Language;
+    if (preferredLang) setLang(preferredLang);
+    
+    const savedTheme = localStorage.getItem('theme') as Theme;
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (savedTheme) {
+        setTheme(savedTheme);
+    } else if (prefersDark) {
+        setTheme('dark');
+    }
+
+    const unsubscribe = fb.onAuthStateChanged(async (user) => {
+        setIsLoading(true);
+        if (user) {
+          try {
+            setCurrentUser(user);
+            if (user.isAdmin) {
+                await fetchDataForAdmin();
+                setCurrentPage('adminDashboard');
+            } else if (user.uid) {
+                await fetchDataForCurrentUser(user.uid);
+                const users = await fb.getAllUsers();
+                setAllUsers(users);
+                const allVehiclesData = await fb.getAllVehicles();
+                setAllVehicles(allVehiclesData);
+                setCurrentPage('dashboard');
+            }
+          } catch(error) {
+            console.error("Failed to fetch data post-login:", error);
+            await fb.logoutUser();
+          }
+        } else {
+            // Only clear state if not offline admin
+            const offlineAdmin = localStorage.getItem('offlineAdminUser');
+            if (!offlineAdmin) {
+              setCurrentUser(null);
+              setProjectData(initialProjectData);
+              setAllUsers([]);
+              setAllProjectData({});
+              setAllTransfers([]);
+              setAllVehicles([]);
+              setCurrentPage('dashboard');
+            }
+        }
+        setIsLoading(false);
+    });
+    return () => unsubscribe();
+  }, [fetchDataForCurrentUser]); // Remove fetchDataForAdmin to prevent infinite loop
+
+  useEffect(() => {
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+  }, [lang]);
+  
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const handleLanguageChange = (newLang: Language) => {
+    setLang(newLang);
+    localStorage.setItem('preferredLanguage', newLang);
+  };
+  
+  const handleThemeChange = (newTheme: Theme) => {
+    setTheme(newTheme);
+  };
+  
+  const getActiveUserId = (): string | null => {
+      return viewingProjectAsAdmin?.uid || currentUser?.uid || null;
+  }
+
+  // --- Auth Handlers ---
+  const handleSignUp = async (newUser: User) => {
+    await fb.signUpUser(newUser);
+  };
+
+  const handleLogin = async (email: string, pass: string): Promise<void> => {
+    try {
+      // Firebase auth will trigger onAuthStateChanged when successful
+      await fb.loginUser(email, pass);
+      setShowWelcome(true);
+      setTimeout(() => setShowWelcome(false), 3000);
+    } catch (error: any) {
+      console.error('❌ Login failed:', error.message);
+      throw new Error(error.message);
+    }
+  };
+
+  const handleLogout = async () => {
+    // Clear offline admin session
+    localStorage.removeItem('offlineAdminUser');
+    
+    await fb.logoutUser();
+    setViewingProjectAsAdmin(null);
+    setCurrentUser(null);
+    setCurrentPage('dashboard');
+  };
+  
+  const handleAdminViewProject = (user: User) => {
+      setViewingProjectAsAdmin(user);
+      setCurrentPage('dashboard');
+  };
+  
+  const handleReturnToAdminDashboard = () => {
+      setViewingProjectAsAdmin(null);
+      setCurrentPage('adminDashboard');
+  };
+
+  // --- Data Handlers ---
+  const handleAddVehicle = async (newVehicleData: Omit<Vehicle, 'id'>) => {
+    const activeId = getActiveUserId();
+    if (!activeId || (currentUser?.isAdmin && !viewingProjectAsAdmin)) return;
+    await fb.addVehicle(newVehicleData, activeId);
+    if (currentUser?.isAdmin) await fetchDataForAdmin();
+    await fetchDataForCurrentUser(activeId);
+  };
+
+  const handleUpdateVehicle = async (updatedVehicle: Vehicle) => {
+    const activeId = getActiveUserId();
+    if (!activeId || (currentUser?.isAdmin && !viewingProjectAsAdmin)) return;
+    await fb.updateVehicle(updatedVehicle);
+    if (currentUser?.isAdmin) await fetchDataForAdmin();
+    await fetchDataForCurrentUser(activeId);
+  };
+
+  const handleDeleteVehicle = async (vehicleId: string) => {
+    const activeId = getActiveUserId();
+    if (!activeId || (currentUser?.isAdmin && !viewingProjectAsAdmin)) return;
+    await fb.deleteVehicle(vehicleId);
+    if (currentUser?.isAdmin) await fetchDataForAdmin();
+    await fetchDataForCurrentUser(activeId);
+  };
+
+  const handleDeleteSelectedVehicles = async (vehicleIds: string[]) => {
+    const activeId = getActiveUserId();
+    if (!activeId || (currentUser?.isAdmin && !viewingProjectAsAdmin)) return;
+    await fb.deleteVehicles(vehicleIds);
+    if (currentUser?.isAdmin) await fetchDataForAdmin();
+    await fetchDataForCurrentUser(activeId);
+  };
+
+  const handleAddDriver = async (newDriverData: Omit<Driver, 'id'>) => {
+    const activeId = getActiveUserId();
+    if (!activeId || (currentUser?.isAdmin && !viewingProjectAsAdmin)) return;
+    await fb.addDriver(newDriverData, activeId);
+    if (currentUser?.isAdmin) await fetchDataForAdmin();
+    await fetchDataForCurrentUser(activeId);
+  };
+  
+  const handleUpdateDriver = async (updatedDriver: Driver) => {
+    const activeId = getActiveUserId();
+    if (!activeId || (currentUser?.isAdmin && !viewingProjectAsAdmin)) return;
+    await fb.updateDriver(updatedDriver);
+    if (currentUser?.isAdmin) await fetchDataForAdmin();
+    await fetchDataForCurrentUser(activeId);
+  };
+
+  const handleDeleteDriver = async (driverId: string) => {
+    const activeId = getActiveUserId();
+    if (!activeId || (currentUser?.isAdmin && !viewingProjectAsAdmin)) return;
+    await fb.deleteDriver(driverId);
+    if (currentUser?.isAdmin) await fetchDataForAdmin();
+    await fetchDataForCurrentUser(activeId);
+  };
+
+  const handleDeleteSelectedDrivers = async (driverIds: string[]) => {
+    const activeId = getActiveUserId();
+    if (!activeId || (currentUser?.isAdmin && !viewingProjectAsAdmin)) return;
+    await fb.deleteDrivers(driverIds);
+    if (currentUser?.isAdmin) await fetchDataForAdmin();
+    await fetchDataForCurrentUser(activeId);
+  };
+
+  const handleAddIncident = async (incidentData: Omit<Incident, 'id'>) => {
+    const activeId = getActiveUserId();
+    if (!activeId || (currentUser?.isAdmin && !viewingProjectAsAdmin)) return;
+    await fb.addIncident(incidentData, activeId);
+    if (currentUser?.isAdmin) await fetchDataForAdmin();
+    await fetchDataForCurrentUser(activeId);
+  };
+
+  const handleEditIncident = (incident: Incident) => {
+    // For now, we can navigate to the report incident page with pre-filled data
+    // In the future, we can create a dedicated edit modal
+    console.log('Edit incident:', incident);
+    // TODO: Implement incident editing functionality
+  };
+
+  const handleDeleteIncident = async (incidentId: string) => {
+    const activeId = getActiveUserId();
+    if (!activeId || (currentUser?.isAdmin && !viewingProjectAsAdmin)) return;
+    try {
+      await fb.deleteIncident(incidentId);
+      if (currentUser?.isAdmin) await fetchDataForAdmin();
+      await fetchDataForCurrentUser(activeId);
+    } catch (error) {
+      console.error('Error deleting incident:', error);
+    }
+  };
+
+  const handleUpdateVehicleStatus = async (vehicleId: string, status: VehicleStatus) => {
+    const activeId = getActiveUserId();
+    if (!activeId || (currentUser?.isAdmin && !viewingProjectAsAdmin)) return;
+    try {
+      await fb.updateVehicleStatus(vehicleId, status);
+      if (currentUser?.isAdmin) await fetchDataForAdmin();
+      await fetchDataForCurrentUser(activeId);
+    } catch (error) {
+      console.error('Error updating vehicle status:', error);
+    }
+  };
+
+  const handleTransferVehicle = async (vehicleId: string, toUserId: string, transferDate: string) => {
+    const activeId = getActiveUserId();
+    if (!activeId || (currentUser?.isAdmin && !viewingProjectAsAdmin)) return;
+    await fb.transferVehicle(vehicleId, activeId, toUserId, transferDate);
+    if (currentUser?.isAdmin) await fetchDataForAdmin();
+    await fetchDataForCurrentUser(activeId);
+    // Also fetch for admin to update global transfer log
+    if (!currentUser?.isAdmin) await fetchDataForAdmin();
+  };
+  
+  const handleAddNotification = async (notificationData: Omit<AdminNotification, 'id' | 'isRead' | 'timestamp'>) => {
+    await fb.addAdminNotification(notificationData);
+    if (currentUser?.isAdmin) await fetchDataForAdmin();
+  };
+
+  const handleDismissNotification = async (notificationId: string) => {
+    await fb.deleteAdminNotification(notificationId);
+    if (currentUser?.isAdmin) await fetchDataForAdmin();
+  };
+  
+  const handleClearAllNotifications = async () => {
+    await fb.deleteAllAdminNotifications();
+    if (currentUser?.isAdmin) await fetchDataForAdmin();
+  };
+
+  const handleDeleteTransfer = async (transferId: string) => {
+      const activeId = getActiveUserId();
+      if (!activeId) return;
+      await fb.deleteTransfer(transferId);
+      if (currentUser?.isAdmin) await fetchDataForAdmin();
+      await fetchDataForCurrentUser(activeId);
+  }
+
+  const handleUpdateManPower = async (supervisorData: Omit<Supervisor, 'id' | 'userId'> & { foremen: Omit<Foreman, 'id'>[] }, campLabour: number, crewman: number) => {
+      const activeId = getActiveUserId();
+      if (!activeId || (currentUser?.isAdmin && !viewingProjectAsAdmin)) return;
+      await fb.updateManPower(supervisorData, campLabour, crewman, activeId);
+      if (currentUser?.isAdmin) await fetchDataForAdmin();
+      await fetchDataForCurrentUser(activeId);
+  }
+
+  const handleAddSupervisor = async (supervisorData: Omit<Supervisor, 'id' | 'userId'> & { foremen: Omit<Foreman, 'id'>[] }) => {
+      const activeId = getActiveUserId();
+      if (!activeId || (currentUser?.isAdmin && !viewingProjectAsAdmin)) return;
+      await fb.addSupervisor(supervisorData, activeId);
+      if (currentUser?.isAdmin) await fetchDataForAdmin();
+      await fetchDataForCurrentUser(activeId);
+  }
+
+  const handleUpdateProjectLabour = async (campLabour: number, crewman: number) => {
+      const activeId = getActiveUserId();
+      if (!activeId || (currentUser?.isAdmin && !viewingProjectAsAdmin)) return;
+      await fb.updateProjectLabour(campLabour, crewman, activeId);
+      if (currentUser?.isAdmin) await fetchDataForAdmin();
+      await fetchDataForCurrentUser(activeId);
+  }
+  
+  const handleUpdateSupervisor = async (updatedSupervisor: Supervisor) => {
+    const activeId = getActiveUserId();
+    if (!activeId || (currentUser?.isAdmin && !viewingProjectAsAdmin)) return;
+    await fb.updateSupervisor(updatedSupervisor);
+    if (currentUser?.isAdmin) await fetchDataForAdmin();
+    await fetchDataForCurrentUser(activeId);
+  };
+  
+  const handleDeleteSupervisor = async (supervisorId: string) => {
+    const activeId = getActiveUserId();
+    if (!activeId || (currentUser?.isAdmin && !viewingProjectAsAdmin)) return;
+    
+    try {
+      console.log('🗑️ App: Deleting supervisor:', supervisorId);
+      
+      // Delete from database first
+      await fb.deleteSupervisor(supervisorId);
+      console.log('✅ App: Supervisor deleted from database');
+      
+      // Then refresh data to update UI state
+      if (currentUser?.isAdmin) {
+        await fetchDataForAdmin();
+      }
+      await fetchDataForCurrentUser(activeId);
+      console.log('✅ App: Data refreshed after supervisor deletion');
+      
+    } catch (error) {
+      console.error('❌ App: Error deleting supervisor:', error);
+      
+      // If deletion failed, still refresh data to sync with actual database state
+      if (currentUser?.isAdmin) {
+        await fetchDataForAdmin();
+      }
+      await fetchDataForCurrentUser(activeId);
+    }
+  };
+
+  const handleEditSupervisor = (supervisor: Supervisor) => {
+    // Set the supervisor data for editing
+    setEditingSupervisorData(supervisor);
+    // Navigate to Add Supervisor page
+    setCurrentPage('addSupervisor');
+  };
+
+  const handleUpdateProjectOfficers = async (officers: Omit<ProjectOfficer, 'id'|'userId'>[]) => {
+    const activeId = getActiveUserId();
+    if (!activeId || (currentUser?.isAdmin && !viewingProjectAsAdmin)) return;
+    await fb.updateProjectOfficers(officers, activeId);
+    if (currentUser?.isAdmin) await fetchDataForAdmin();
+    await fetchDataForCurrentUser(activeId);
+  }
+
+  // Admin password management functions
+  const handleUpdateUserPassword = async (userEmail: string, newPassword: string): Promise<void> => {
+    if (!currentUser?.isAdmin) {
+      throw new Error('Only admin users can update passwords');
+    }
+    
+    await fb.resetUserPassword(userEmail, newPassword);
+    if (!success) {
+      throw new Error('Failed to update user password');
+    }
+    
+    // Refresh admin data to get updated user information
+    await fetchDataForAdmin();
+  };
+
+  const handleUpdateAllPasswords = async (newPassword: string): Promise<void> => {
+    if (!currentUser?.isAdmin) {
+      throw new Error('Only admin users can update all passwords');
+    }
+    
+    // Bulk password update not available in current Firebase service
+    console.log('Bulk password update feature not implemented');
+    if (!success) {
+      throw new Error('Failed to update all passwords');
+    }
+    
+    // Refresh admin data to get updated user information
+    await fetchDataForAdmin();
+  };
+  
+  const handleImport = async (type: 'vehicles' | 'drivers', data: any[]) => {
+      const activeId = getActiveUserId();
+      if (!activeId || (currentUser?.isAdmin && !viewingProjectAsAdmin)) {
+          return { success: false, error: 'User not authenticated' };
+      }
+
+      const BATCH_SIZE = 100; // Process 100 records at a time
+      let importedCount = 0;
+      let failedCount = 0;
+      
+      try {
+          if (type === 'vehicles') {
+              console.log('🚗 Vehicle import data received:', data);
+              
+              // Process in batches
+             let importedCount = 0;
+
+// Process in batches of 100
+for (let i = 0; i < data.length; i += 100) {
+    const batch = data.slice(i, i + 100);
+
+    const batchPromises = batch.map(async row => {
+        console.log('🔍 Processing vehicle row:', row);
+
+        const newVehicle: Omit<Vehicle, 'id'> = {
+            doorNumber: String(row['Door Number'] || row['Door #'] || ''),
+            plateNumber: String(row['Plate Number'] || row['Plate #'] || ''),
+            chassisNumber: String(row['Chassis Number'] || row['Chassis #'] || ''),
+            make: String(row['Make / Model'] || ''),
+            manufacturer: String(row['Manufacturer'] || ''),
+            year: String(row['Year'] || ''),
+            purchaseDate: String(row['Purchase Date'] || ''),
+            tareWeight: String(row['Tare Weight (KG)'] || row['Tare Weight'] || ''),
+            serviceType: String(row['Service Type'] || ''),
+            projectSite: String(row['Project Site / Area'] || row['Project Site'] || ''),
+            status: (row['Status'] as Vehicle['status']) || 'Active',
+        };
+
+        console.log('🚗 Vehicle data prepared:', newVehicle);
+
+        if (!newVehicle.doorNumber) {
+            console.warn('⚠️ Skipping vehicle without door number:', newVehicle);
+            return;
+        }
+
+        try {
+            await fb.addVehicle(newVehicle, activeId);
+            importedCount++;
+            console.log('✅ Vehicle added successfully:', newVehicle.doorNumber);
+        } catch (error) {
+            console.error('❌ Error adding vehicle:', error, newVehicle);
+        }
+    });
+
+    await Promise.all(batchPromises);
+}
+
+console.log(`📊 Vehicle import summary: ${importedCount} vehicles imported out of ${data.length} rows`);
+
+          }
+           else if (type === 'drivers') {
+              console.log('📋 Import data received:', data);
+              let importedCount = 0;
+              
+              // Process drivers in batches of 100
+              for (let i = 0; i < data.length; i += 100) {
+                  const batch = data.slice(i, i + 100);
+                  const batchPromises = batch.map(async row => {
+                      console.log('🔍 Processing row:', row);
+                  
+                      const newDriver: Omit<Driver, 'id'> = {
+                          driverName: String(row["Driver Name"] || row["driverName"] || ''),
+                          nationality: String(row['Nationality'] || row["nationality"] || ''),
+                          driverIqama: String(row["Driver's Iqama Number"] || row["Iqama"] || row["driverIqama"] || ''),
+                          driverMobile: String(row["Driver's Mobile Number"] || row["Mobile"] || row["driverMobile"] || '').replace(/\D/g, '').slice(-9),
+                          assignedVehicle: '', // Cannot resolve vehicle ID from import directly easily
+                      };
+                      
+                      console.log('👤 Driver data prepared:', newDriver);
+                      
+                      if (!newDriver.driverName || !newDriver.driverIqama) {
+                          console.warn('⚠️ Skipping invalid driver:', newDriver);
+                          return;
+                      }
+                      
+                      try {
+                          await fb.addDriver(newDriver, activeId);
+                          importedCount++;
+                          console.log('✅ Driver added successfully:', newDriver.driverName);
+                      } catch (error) {
+                          console.error('❌ Error adding driver:', error, newDriver);
+                      }
+                  });
+                  
+                  await Promise.all(batchPromises);
+              }
+              
+              console.log(`📊 Import summary: ${importedCount} drivers imported out of ${data.length} rows`);
+          }
+          if (currentUser?.isAdmin) await fetchDataForAdmin();
+          await fetchDataForCurrentUser(activeId);
+          return { success: true };
+      } catch (e) {
+          console.error("Import error:", e);
+          const message = e instanceof Error ? e.message : 'Unknown import error.';
+          return { success: false, error: message };
+      }
+  };
+
+
+  // --- Page Navigation ---
+  const handleNavigate = (page: Page) => {
+    if (page === 'viewVehicleDetails') {
+      console.warn("Direct navigation to viewVehicleDetails is deprecated. Select a vehicle from the list.");
+      return;
+    }
+    setCurrentPage(page);
+  };
+  
+  const handleViewVehicleDetails = (vehicleId: string) => {
+    setSelectedVehicleId(vehicleId);
+    setCurrentPage('viewVehicleDetails');
+  };
+
+  const allVehiclesList = useMemo(() => {
+    return currentUser?.isAdmin 
+      ? Object.values(allProjectData).flatMap((p: ProjectData) => p.vehicles || [])
+      : allVehicles;
+  }, [currentUser, allProjectData, allVehicles]);
+
+  const renderContent = () => {
+    const activeProjectData = (currentUser?.isAdmin && viewingProjectAsAdmin && allProjectData[viewingProjectAsAdmin.email])
+        ? allProjectData[viewingProjectAsAdmin.email]
+        : projectData;
+    const activeProjectName = viewingProjectAsAdmin?.projectName || currentUser?.projectName || '';
+    const isReadOnlyView = currentUser?.isAdmin && viewingProjectAsAdmin !== null;
+
+    if (!currentUser) return null; // Should be handled by AuthPage redirect, but good practice
+
+    switch (currentPage) {
+      case 'dashboard':
+        return <Dashboard lang={lang} vehicles={activeProjectData.vehicles || []} drivers={activeProjectData.drivers || []} projectName={activeProjectName} incidents={activeProjectData.incidents || []} supervisors={activeProjectData.supervisors || []} projectOfficers={activeProjectData.projectOfficers || []} campLabour={activeProjectData.campLabour || 0} crewman={activeProjectData.crewman || 0} />;
+      case 'addVehicle':
+        return <AddVehicleForm lang={lang} onAddVehicle={handleAddVehicle} defaultProjectSite={activeProjectName} />;
+      case 'viewVehicles':
+        return <ViewVehiclesPage lang={lang} vehicles={activeProjectData.vehicles || []} drivers={activeProjectData.drivers || []} onUpdateVehicle={handleUpdateVehicle} onDeleteVehicle={handleDeleteVehicle} onViewDetails={handleViewVehicleDetails} onImportVehicles={(d) => handleImport('vehicles', d)} onUpdateVehicleStatus={handleUpdateVehicleStatus} isReadOnly={isReadOnlyView} onDeleteSelectedVehicles={handleDeleteSelectedVehicles} />;
+      case 'addDriver':
+        return <AddDriverForm lang={lang} onAddDriver={handleAddDriver} vehicles={activeProjectData.vehicles || []} drivers={activeProjectData.drivers || []} />;
+      case 'viewDrivers':
+        return <ViewDriversPage lang={lang} drivers={activeProjectData.drivers || []} vehicles={activeProjectData.vehicles || []} onUpdateDriver={handleUpdateDriver} onDeleteDriver={handleDeleteDriver} onImportDrivers={(d) => handleImport('drivers', d)} isReadOnly={isReadOnlyView} onDeleteSelectedDrivers={handleDeleteSelectedDrivers} />;
+      case 'viewVehicleDetails':
+        return <VehicleDetailsPage lang={lang} vehicles={activeProjectData.vehicles || []} drivers={activeProjectData.drivers || []} selectedVehicleId={selectedVehicleId} />;
+      case 'settings':
+        return <SettingsPage 
+          lang={lang} 
+          onLanguageChange={handleLanguageChange} 
+          theme={theme} 
+          onThemeChange={handleThemeChange}
+          user={currentUser}
+          allUsers={allUsers}
+          onUpdateUserPassword={handleUpdateUserPassword}
+          onUpdateAllPasswords={handleUpdateAllPasswords}
+        />;
+      case 'reportIncident':
+        return <ReportIncidentForm lang={lang} vehicles={activeProjectData.vehicles || []} onAddIncident={handleAddIncident} />;
+      case 'reports':
+        return <ReportsPage lang={lang} incidents={activeProjectData.incidents || []} vehicles={activeProjectData.vehicles || []} onEditIncident={handleEditIncident} onDeleteIncident={handleDeleteIncident} isReadOnly={isReadOnlyView} />;
+      case 'adminDashboard':
+         return currentUser.isAdmin ? <AdminDashboard lang={lang} allUsers={allUsers} allProjectData={allProjectData} allAdminNotifications={allAdminNotifications} onDismissNotification={handleDismissNotification} onClearAllNotifications={handleClearAllNotifications} /> : null;
+      case 'transferVehicle':
+        return <TransferVehiclePage lang={lang} vehicles={activeProjectData.vehicles || []} allVehicles={allVehiclesList} transfers={activeProjectData.transfers || []} notifications={activeProjectData.notifications || []} allUsers={allUsers} currentUser={currentUser} onTransfer={handleTransferVehicle} onAddNotification={handleAddNotification} onDeleteTransfer={handleDeleteTransfer} isReadOnly={isReadOnlyView} />;
+      case 'addSupervisor':
+        return <AddSupervisorPage 
+          lang={lang} 
+          onUpdateManPower={handleUpdateManPower} 
+          onAddSupervisor={handleAddSupervisor}
+          onUpdateSupervisor={handleUpdateSupervisor}
+          onUpdateProjectLabour={handleUpdateProjectLabour}
+          projectData={activeProjectData}
+          editingSupervisor={editingSupervisorData}
+          onClearEditingSupervisor={() => setEditingSupervisorData(null)}
+        />;
+      case 'supervisorOverview':
+        return <SupervisorOverviewPage lang={lang} projectData={activeProjectData} onUpdateSupervisor={handleUpdateSupervisor} onDeleteSupervisor={handleDeleteSupervisor} onEditSupervisor={handleEditSupervisor} isReadOnly={isReadOnlyView} />;
+      case 'addProjectOfficers':
+        return <AddProjectOfficersPage lang={lang} projectOfficers={activeProjectData.projectOfficers || []} onUpdateOfficers={handleUpdateProjectOfficers} />;
+      case 'viewProjectOfficers':
+        return <ViewProjectOfficersPage lang={lang} projectOfficers={activeProjectData.projectOfficers || []} />;
+      // Admin Report Pages
+      case 'adminAllProjects':
+        return currentUser.isAdmin ? <AdminAllProjectsPage lang={lang} allUsers={allUsers} onViewProjectDashboard={handleAdminViewProject} /> : null;
+      case 'adminAllVehicles':
+        return currentUser.isAdmin ? <AdminAllVehiclesPage lang={lang} allUsers={allUsers} allProjectData={allProjectData} /> : null;
+      case 'adminAllIncidents':
+        return currentUser.isAdmin ? <AdminAllIncidentsPage lang={lang} allUsers={allUsers} allProjectData={allProjectData} /> : null;
+      case 'adminTransferLog':
+        return currentUser.isAdmin ? <AdminTransferLogPage lang={lang} allUsers={allUsers} allProjectData={allProjectData} allTransfers={allTransfers} /> : null;
+      default:
+        return <div>Page not found</div>;
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
+        <div className="flex items-center space-x-3 rtl:space-x-reverse">
+          <i className="fas fa-spinner fa-spin text-4xl text-blue-600 dark:text-blue-400"></i>
+          <span className="text-xl text-gray-700 dark:text-gray-300">Loading...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <div className={`min-h-screen flex flex-col ${lang === 'ar' ? 'rtl' : 'ltr'}`}>
+        <TopBar />
+        <div className="flex-1">
+          <AuthPage onLogin={handleLogin} onSignUp={handleSignUp} lang={lang} onLanguageChange={handleLanguageChange} />
+        </div>
+      </div>
+    );
+  }
+  
+  if (showWelcome) {
+    return (
+      <div className={`min-h-screen flex flex-col ${lang === 'ar' ? 'rtl' : 'ltr'}`}>
+        <TopBar />
+        <div className="flex-1">
+          <WelcomePage user={currentUser} lang={lang} />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`min-h-screen flex flex-col ${lang === 'ar' ? 'rtl' : 'ltr'}`}>
+      {/* Top bar with Zahran logo - appears on all screens */}
+      <TopBar />
+      
+      <div className="flex flex-1">
+        <Sidebar
+          currentPage={currentPage}
+          onNavigate={handleNavigate}
+          currentLang={lang}
+          onLogout={handleLogout}
+          isAdmin={currentUser?.isAdmin || false}
+          isViewingProject={!!viewingProjectAsAdmin}
+          isOpen={isSidebarOpen}
+          onClose={() => setIsSidebarOpen(false)}
+        />
+        <main className="flex-1 flex flex-col relative overflow-hidden">
+          <Header 
+            lang={lang} 
+            onToggleSidebar={() => setIsSidebarOpen(true)}
+            isViewingProjectAsAdmin={!!viewingProjectAsAdmin}
+            projectName={viewingProjectAsAdmin?.projectName || ''}
+            onReturnToAdminDashboard={handleReturnToAdminDashboard}
+          />
+          <div className="flex-grow p-6 overflow-y-auto bg-gray-100 dark:bg-gray-900 scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200 dark:scrollbar-thumb-gray-600 dark:scrollbar-track-gray-800">
+            {renderContent()}
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+};
+
+export default App;

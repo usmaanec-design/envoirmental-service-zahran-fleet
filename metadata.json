@@ -1,0 +1,5 @@
+{
+  "name": "Zahran Fleet Management",
+  "description": "A web application to add new drivers to the Zahran Vehicle Management system. The form supports both English and Arabic languages and allows assigning an available vehicle to the driver.",
+  "requestFramePermissions": []
+}
