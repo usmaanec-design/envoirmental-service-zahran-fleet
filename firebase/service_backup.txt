@@ -1,0 +1,24 @@
+{
+  "exportDate": "2025-11-12T00:00:00.000Z",
+  "exportedBy": "system",
+  "projectName": "Fresh Zahran Fleet Management",
+  "collections": {
+    "users": [],
+    "vehicles": [],
+    "drivers": [],
+    "supervisors": [],
+    "crewmen": [],
+    "campLabours": [],
+    "incidents": [],
+    "transfers": [],
+    "repairHistory": [],
+    "projectOfficers": [],
+    "notifications": []
+  },
+  "notes": "This is a fresh backup structure. Users can import their own data or add data manually through the application interface.",
+  "instructions": {
+    "how_to_use": "New users should create their accounts and add their data through the web interface. This file serves as a template structure.",
+    "data_format": "Follow the existing structure when importing data.",
+    "admin_account": "zahran@projects.reports / zahran111"
+  }
+}

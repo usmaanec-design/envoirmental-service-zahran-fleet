@@ -1,17 +1,30 @@
 import React from 'react';
 
 interface FormStatusProps {
-    type: 'success' | 'error';
+    type: 'success' | 'error' | 'info';
     message: string;
     className?: string;
     onAnimationEnd?: () => void;
 }
 
 const FormStatus: React.FC<FormStatusProps> = ({ type, message, className, onAnimationEnd }) => {
-    const isSuccess = type === 'success';
+    const styles = {
+        success: {
+            color: 'bg-green-500',
+            icon: 'fa-check-circle',
+        },
+        error: {
+            color: 'bg-red-500',
+            icon: 'fa-exclamation-triangle',
+        },
+        info: {
+            color: 'bg-orange-500',
+            icon: 'fa-info-circle',
+        },
+    };
+
+    const { color: colorClasses, icon } = styles[type];
     const baseClasses = `p-4 mb-6 rounded-md text-white`;
-    const colorClasses = isSuccess ? 'bg-green-500' : 'bg-red-500';
-    const icon = isSuccess ? 'fa-check-circle' : 'fa-exclamation-triangle';
 
     return (
         <div

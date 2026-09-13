@@ -36,15 +36,16 @@ const VehicleSelect: React.FC<VehicleSelectProps> = ({
     }, [value, vehicles]);
 
     const filteredVehicles = useMemo(() => {
-        if (!searchTerm) {
+        if (!searchTerm.trim()) {
             return vehicles;
         }
         const lowercasedFilter = searchTerm.toLowerCase();
-        return vehicles.filter(vehicle =>
+        const filtered = vehicles.filter(vehicle =>
             vehicle.doorNumber.toLowerCase().includes(lowercasedFilter) ||
             vehicle.plateNumber.toLowerCase().includes(lowercasedFilter) ||
             vehicle.chassisNumber.toLowerCase().includes(lowercasedFilter)
         );
+        return filtered;
     }, [searchTerm, vehicles]);
 
     const handleSelect = (vehicle: Vehicle) => {
@@ -72,7 +73,7 @@ const VehicleSelect: React.FC<VehicleSelectProps> = ({
     }, [wrapperRef]);
     
     const displayValue = selectedValue 
-        ? selectedValue.doorNumber
+        ? `${selectedValue.doorNumber} - ${selectedValue.plateNumber} (${selectedValue.chassisNumber})`
         : placeholder;
 
     return (
@@ -82,7 +83,7 @@ const VehicleSelect: React.FC<VehicleSelectProps> = ({
                 <button
                     type="button"
                     onClick={() => setIsOpen(!isOpen)}
-                    className={`relative w-full h-11 px-4 text-left bg-white dark:bg-gray-700 border rounded-lg shadow-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    className={`relative w-full h-11 px-4 text-left bg-white dark:bg-gray-700 border rounded-lg shadow-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 ${
                         error ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
                     }`}
                 >
@@ -106,14 +107,14 @@ const VehicleSelect: React.FC<VehicleSelectProps> = ({
             </div>
 
             {isOpen && (
-                <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black dark:ring-white ring-opacity-5 dark:ring-opacity-20 overflow-auto scrollbar-thin scrollbar-thumb-blue-400 scrollbar-track-gray-200 dark:scrollbar-thumb-blue-600 dark:scrollbar-track-gray-700 focus:outline-none sm:text-sm">
+                <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black dark:ring-white ring-opacity-5 dark:ring-opacity-20 overflow-auto focus:outline-none sm:text-sm">
                     <div className="p-2">
                         <input
                             type="text"
                             placeholder={searchTermPlaceholder}
                             value={searchTerm}
                             onChange={(e) => onSearchTermChange(e.target.value)}
-                            className="w-full h-10 px-3 border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-gray-200"
+                            className="w-full h-10 px-3 border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:ring-orange-500 focus:border-orange-500 text-gray-900 dark:text-gray-200"
                         />
                     </div>
                     
@@ -122,26 +123,23 @@ const VehicleSelect: React.FC<VehicleSelectProps> = ({
                             <div
                                 key={vehicle.id}
                                 onClick={() => handleSelect(vehicle)}
-                                className="cursor-pointer select-none relative py-3 ps-3 pe-9 text-gray-900 dark:text-gray-200 hover:bg-blue-100 dark:hover:bg-blue-900 border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+                                className="cursor-pointer select-none relative py-2 ps-3 pe-9 text-gray-900 dark:text-gray-200 hover:bg-orange-100 dark:hover:bg-orange-900"
                             >
-                                <div className="flex flex-col">
-                                    <span className="font-bold text-lg text-blue-600 dark:text-blue-400">
-                                        {vehicle.doorNumber}
-                                    </span>
-                                    <span className="text-xs text-gray-500 dark:text-gray-400">
-                                        {vehicle.plateNumber} • {vehicle.model}
-                                    </span>
-                                </div>
-                                {vehicle.id === value && (
-                                    <span className="absolute inset-y-0 end-0 flex items-center pe-4">
-                                        <i className="fas fa-check text-blue-600 dark:text-blue-400"></i>
-                                    </span>
-                                )}
+                                <span className="block truncate">
+                                    {`${vehicle.doorNumber} - ${vehicle.plateNumber} (${vehicle.chassisNumber})`}
+                                </span>
                             </div>
                         ))
                     ) : (
-                        <div className="cursor-default select-none relative py-2 px-4 text-gray-500 dark:text-gray-400">
-                            {noResultsText}
+                        <div className="cursor-default select-none relative py-3 px-4 text-gray-500 dark:text-gray-400 text-center">
+                            <i className="fas fa-car mb-2 text-gray-400"></i>
+                            <br />
+                            {searchTerm.trim() ? 
+                                'No vehicles match your search.' : 
+                                'No available vehicles in this project.'
+                            }
+                            <br />
+                            <small className="text-xs">Contact admin to add vehicles or check vehicle status.</small>
                         </div>
                     )}
                 </div>

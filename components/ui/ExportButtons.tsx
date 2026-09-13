@@ -18,10 +18,10 @@ const ExportButtons: React.FC<ExportButtonsProps> = ({ data, title }) => {
         <div className="flex items-center space-x-2 rtl:space-x-reverse">
             <button
                 onClick={handleExcelExport}
-                className="bg-green-500 text-white px-3 py-2 rounded-md hover:bg-green-600 transition-colors text-sm font-medium flex items-center"
+                className="bg-green-600 hover:bg-green-700 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold flex items-center gap-2 shadow-sm transition-all hover:shadow cursor-pointer"
                 title="Export to Excel"
             >
-                <i className="fas fa-file-excel me-2"></i>
+                <i className="fas fa-file-excel text-xs sm:text-sm"></i>
                 <span>Excel</span>
             </button>
         </div>

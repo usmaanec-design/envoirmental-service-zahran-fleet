@@ -1,36 +1,36 @@
 import React from 'react';
 
 interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
-    label: string;
+    label?: string;
     name: string;
-    options: { value: string; label: string }[];
+    options: { value: string; label: string; disabled?: boolean }[];
     placeholder?: string;
     error?: string;
 }
 
-const Select: React.FC<SelectProps> = ({ label, name, options, placeholder, error, required, ...props }) => {
+const Select: React.FC<SelectProps> = ({ label, name, options, placeholder, error, required, className = '', ...props }) => {
     return (
-        <div>
+        <div className="w-full">
             {label && (
-                <label htmlFor={name} className="block font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label htmlFor={name} className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
                     {label} {required && <span className="text-red-500">*</span>}
                 </label>
             )}
             <select
                 id={name}
                 name={name}
-                className={`block w-full h-11 px-3 border ${error ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 transition duration-150 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200`}
+                className={`block w-full h-10 px-3 text-xs sm:text-sm border ${error ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 dark:border-gray-600 focus:ring-orange-500 focus:border-orange-500'} rounded-lg shadow-sm focus:ring-2 transition duration-150 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 outline-none cursor-pointer ${className}`}
                 required={required}
                 {...props}
             >
                 {placeholder && <option value="">{placeholder}</option>}
-                {options.map((option, index) => (
-                    <option key={`${option.value}-${index}`} value={option.value}>
+                {options.map(option => (
+                    <option key={option.value} value={option.value} disabled={option.disabled}>
                         {option.label}
                     </option>
                 ))}
             </select>
-            {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
+            {error && <p className="text-red-500 text-xs mt-1 font-medium">{error}</p>}
         </div>
     );
 };

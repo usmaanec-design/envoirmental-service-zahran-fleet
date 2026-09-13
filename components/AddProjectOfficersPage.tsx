@@ -47,35 +47,11 @@ const AddProjectOfficersPage: React.FC<AddProjectOfficersPageProps> = ({ lang, p
         setOfficers([...officers, { role: '', name: '', iqama: '', mobile: '' }]);
     };
 
-    const handleDeleteOfficer = async (index: number) => {
-        console.log("🗑️ Deleting officer at index:", index);
-        console.log("📋 Current officers before delete:", officers);
-        
+    const handleDeleteOfficer = (index: number) => {
         const updatedOfficers = officers.filter((_, i) => i !== index);
         setOfficers(updatedOfficers);
-        
         const updatedErrors = errors.filter((_, i) => i !== index);
         setErrors(updatedErrors);
-        
-        console.log("✅ Officers after delete:", updatedOfficers);
-        
-        // Auto-save after deletion
-        try {
-            setFormStatus({ type: 'success', message: `Deleting officer...` });
-            
-            // Filter out empty officers before saving
-            const officersToSave = updatedOfficers.filter(o => 
-                o.role.trim() || o.name.trim() || o.iqama.trim() || o.mobile.trim()
-            );
-            
-            await onUpdateOfficers(officersToSave);
-            setFormStatus({ type: 'success', message: `Officer deleted and saved successfully!` });
-            setTimeout(() => setFormStatus(null), 3000);
-        } catch (error) {
-            console.error("Error saving after delete:", error);
-            setFormStatus({ type: 'error', message: 'Officer deleted locally but failed to save to database' });
-            setTimeout(() => setFormStatus(null), 5000);
-        }
     };
 
     const validateForm = (): boolean => {
@@ -135,11 +111,18 @@ const AddProjectOfficersPage: React.FC<AddProjectOfficersPageProps> = ({ lang, p
         }
     };
 
+    const handleCancel = () => {
+        setFormStatus(null);
+        if (window.history.length > 1) {
+            window.history.back();
+        }
+    };
+
     return (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 sm:p-8 md:p-10 max-w-5xl mx-auto">
-            <header className="border-b-2 border-blue-500 pb-6 mb-10">
-                <h2 className="text-3xl font-bold text-blue-600 dark:text-blue-400">{t.addProjectOfficers}</h2>
-            </header>
+        <div className="w-full bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md border border-gray-100 dark:border-gray-700 p-4 sm:p-6 transition-all duration-200">
+            <div className="flex flex-wrap justify-between items-center mb-5 pb-4 border-b border-gray-100 dark:border-gray-700 gap-4">
+                <h2 className="text-2xl sm:text-3xl font-bold text-orange-600 dark:text-orange-400">{t.addProjectOfficers}</h2>
+            </div>
 
             {formStatus && <FormStatus type={formStatus.type} message={formStatus.message} />}
 
@@ -184,11 +167,10 @@ const AddProjectOfficersPage: React.FC<AddProjectOfficersPageProps> = ({ lang, p
                         <button
                             type="button"
                             onClick={() => handleDeleteOfficer(index)}
-                            className="absolute top-3 right-3 bg-red-100 hover:bg-red-200 dark:bg-red-900 dark:hover:bg-red-800 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors p-2 rounded-full shadow-sm hover:shadow-md"
-                            title={t.deleteOfficerTitle || "Delete Officer"}
-                            aria-label="Delete Officer"
+                            className="absolute top-3 right-3 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors p-2"
+                            title={t.deleteOfficerTitle}
                         >
-                            🗑️
+                            <i className="fas fa-trash-alt"></i>
                         </button>
                     </div>
                 ))}
@@ -197,14 +179,8 @@ const AddProjectOfficersPage: React.FC<AddProjectOfficersPageProps> = ({ lang, p
                     <Button type="button" variant="info" onClick={handleAddOfficer}>
                         <i className="fas fa-plus me-2"></i> {t.addOfficer}
                     </Button>
-                    
-                    {/* Debug info */}
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                        Officers: {officers.length}
-                    </div>
-                    
                     <div className="flex gap-4">
-                        <Button type="button" variant="secondary" onClick={() => window.history.back()}>
+                        <Button type="button" variant="secondary" onClick={handleCancel}>
                             <i className="fas fa-times me-2"></i> {t.cancel}
                         </Button>
                         <Button type="button" variant="success" onClick={handleSave} disabled={isSubmitting}>

@@ -25,5 +25,10 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "exclude": [
+    "**/*_old.tsx",
+    "components/ViewAllSupervisorsPage.tsx",
+    "node_modules"
+  ]
 }

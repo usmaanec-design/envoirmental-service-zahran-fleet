@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { NAV_LINKS, TRANSLATIONS } from '../constants';
 import type { Page, Language, NavLink } from '../types';
 
@@ -9,13 +9,25 @@ interface SidebarProps {
     onLogout: () => void;
     isAdmin: boolean;
     isViewingProject: boolean;
-    isOpen: boolean;
-    onClose: () => void;
+    isOpen: boolean; // For mobile overlay
+    onClose: () => void; // For mobile overlay
+    isCollapsed: boolean; // For desktop collapsed state
+    onToggleCollapse: () => void; // For desktop toggle
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, currentLang = 'en', onLogout, isAdmin, isViewingProject, isOpen, onClose }) => {
+const Sidebar: React.FC<SidebarProps> = ({ 
+    currentPage, 
+    onNavigate, 
+    currentLang = 'en', 
+    onLogout, 
+    isAdmin, 
+    isViewingProject, 
+    isOpen, 
+    onClose,
+    isCollapsed,
+    onToggleCollapse
+}) => {
   const t = TRANSLATIONS[currentLang];
-  const [isHovered, setIsHovered] = useState(false);
 
   const visibleNavLinks = useMemo(() => {
     if (!isAdmin) {
@@ -26,7 +38,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, currentLang 
     // Admin view
     if (isViewingProject) {
       // Admin viewing a specific project: hide forms for adding/editing
-      const adminProjectViewHiddenKeys: Array<NavLink['labelKey']> = ['addVehicle', 'addDriver', 'reportIncident', 'transferVehicle', 'addSupervisor', 'addProjectOfficers'];
+      const adminProjectViewHiddenKeys: Array<NavLink['labelKey']> = ['addVehicle', 'addDriver', 'reportIncident', 'transferVehicle', 'addMenpower', 'addProjectOfficers'];
       return NAV_LINKS.filter(link => !link.adminOnly && !adminProjectViewHiddenKeys.includes(link.labelKey));
     } else {
       // Admin root dashboard: show only dashboard, admin reports, settings, logout
@@ -40,6 +52,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, currentLang 
   }, [isAdmin, isViewingProject]);
 
   const handleLinkClick = (page: Page | 'logout' | 'adminDashboard') => {
+      // On desktop, if the sidebar is collapsed, the first click on an icon should expand it.
+      if (window.innerWidth >= 1024 && isCollapsed) {
+          onToggleCollapse();
+          return;
+      }
+
       if (page === 'logout') {
           onLogout();
       } else {
@@ -48,23 +66,21 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, currentLang 
       onClose(); // Always close on mobile after an action
   };
   
-  
   const renderLink = (link: NavLink) => {
+    const isDesktopCollapsed = isCollapsed && window.innerWidth >= 1024;
+    
     if (link.type === 'header') {
       const label = t[link.labelKey as keyof typeof t] || 'Menu';
       return (
-         <li key={link.labelKey} className={`px-3 pt-4 pb-2 transition-all duration-300 ${isHovered ? 'px-6' : 'px-3'}`}>
-           <div className={`text-xs font-semibold tracking-wider text-gray-400 uppercase transition-all duration-300 ${
-             isHovered ? 'opacity-100' : 'opacity-0 lg:opacity-0'
-           }`}>
-             {isHovered && label}
-           </div>
+         <li key={link.labelKey} className={`pt-4 pb-2 text-xs font-semibold tracking-wider text-green-200 uppercase transition-all ${isDesktopCollapsed ? 'px-2 text-center' : 'px-8'}`}>
+            {isDesktopCollapsed ? <i className={`fas fa-ellipsis-h`}></i> : label}
         </li>
       );
     }
 
     const isLogout = link.labelKey === 'logout';
     const isDashboard = link.labelKey === 'dashboard';
+    const isVehicleReport = link.labelKey === 'adminAllVehicles';
 
     let targetPage: Page | 'logout' | 'adminDashboard' = link.labelKey as Page;
     if (isDashboard && isAdmin && !isViewingProject) {
@@ -72,47 +88,28 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, currentLang 
     }
     
     const isActive = currentPage === targetPage;
+    const labelText = targetPage === 'adminDashboard' ? t.adminDashboard : t[link.labelKey as keyof typeof t];
+
+    // Button styling
+    const getButtonStyles = () => {
+      if (isActive) {
+        return 'bg-orange-600 text-white shadow-lg';
+      }
+      return 'text-gray-300 hover:bg-orange-500 hover:text-white';
+    };
 
     return (
-      <li key={link.labelKey} className="group">
+      <li key={link.labelKey}>
         <a
           href="#"
           onClick={(e) => { e.preventDefault(); handleLinkClick(targetPage); }}
-          className={`flex items-center py-3 px-3 mx-2 rounded-lg transition-all duration-300 cursor-pointer relative overflow-hidden ${
-            isActive
-              ? 'bg-orange-600 text-white shadow-lg'
-              : 'text-gray-300 hover:bg-green-700 hover:text-white'
-          }`}
+          className={`flex items-center py-2 mx-2 rounded-md transition-all duration-200 cursor-pointer group ${getButtonStyles()} ${isDesktopCollapsed ? 'justify-center px-2' : 'px-6'}`}
+          title={isDesktopCollapsed ? labelText : undefined}
         >
-          {/* Icon Container */}
-          <div className="flex items-center justify-center w-6 h-6 flex-shrink-0">
-            <i className={`${link.icon} text-lg transition-all duration-300`}></i>
-          </div>
-          
-          {/* Text Label - slides in from right when expanded */}
-          <div className={`ml-4 whitespace-nowrap transition-all duration-300 ease-out ${
-            isHovered 
-              ? 'opacity-100 translate-x-0' 
-              : 'opacity-0 -translate-x-4 lg:opacity-0 lg:-translate-x-4'
-          }`}>
-            <span className="font-medium">
-              { targetPage === 'adminDashboard'
-                  ? t.adminDashboard
-                  : t[link.labelKey as keyof typeof t]
-              }
-            </span>
-          </div>
-
-          {/* Tooltip for collapsed state */}
-          {!isHovered && (
-            <div className="absolute left-full ml-3 bg-gray-800 text-white text-sm px-3 py-2 rounded-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-50 shadow-xl border border-gray-700">
-              <div className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-1 w-2 h-2 bg-gray-800 rotate-45 border-l border-b border-gray-700"></div>
-              { targetPage === 'adminDashboard'
-                  ? t.adminDashboard
-                  : t[link.labelKey as keyof typeof t]
-              }
-            </div>
-          )}
+          <i className={`${link.icon} w-6 text-center text-lg`}></i>
+          <span className={`ms-4 transition-opacity ${isDesktopCollapsed ? 'lg:hidden opacity-0' : 'opacity-100'}`}>
+            {labelText}
+          </span>
         </a>
       </li>
     );
@@ -120,18 +117,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, currentLang 
 
   const SidebarContent = () => (
     <>
-      {/* Close button for mobile - only show when expanded */}
-      {isHovered && (
-        <div className="flex items-center justify-end p-3 border-b border-green-600 lg:hidden">
-          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors" aria-label="Close menu">
-            <i className="fas fa-times text-xl"></i>
-          </button>
-        </div>
-      )}
-      
-      {/* Navigation */}
-      <nav className="flex-grow mt-4 overflow-y-auto">
-        <ul className="space-y-1">
+      <nav className="flex-grow pt-4 overflow-y-auto sidebar-scrollbar max-h-screen">
+        <ul className="space-y-0.5 pb-16">
           {visibleNavLinks.map(renderLink)}
         </ul>
       </nav>
@@ -148,14 +135,9 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, currentLang 
 
       {/* Sidebar Container */}
       <div 
-        className={`fixed inset-y-0 left-0 z-40 flex flex-col bg-gradient-to-b from-green-800 to-green-900 text-white shadow-2xl transform transition-all duration-300 ease-in-out
-          ${isOpen ? 'translate-x-0' : '-translate-x-full'} 
-          lg:sticky lg:translate-x-0 lg:h-screen lg:flex-shrink-0`}
-        style={{
-          width: isHovered ? '280px' : '72px'
-        }}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+        className={`sidebar-container fixed inset-y-0 left-0 z-40 flex flex-col bg-green-800 text-white shadow-lg transform transition-all duration-300 ease-in-out h-full
+          ${isOpen ? 'translate-x-0 w-64' : '-translate-x-full w-64'} 
+          lg:relative lg:translate-x-0 lg:transform-none lg:transition-all lg:duration-300 lg:flex-shrink-0 ${isCollapsed ? 'lg:w-20' : 'lg:w-64'}`}
       >
         <SidebarContent />
       </div>

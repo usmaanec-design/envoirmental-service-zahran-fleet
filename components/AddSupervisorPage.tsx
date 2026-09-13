@@ -1,175 +1,196 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { TRANSLATIONS } from '../constants';
-import type { Language, Supervisor, Foreman, ProjectData } from '../types';
+import { TRANSLATIONS, PROJECT_OFFICER_ROLES } from '../constants';
+import type { Language, Supervisor, Foreman, Labour, ProjectData, ProjectOfficer, Page } from '../types';
 import FormSection from './ui/FormSection';
 import Input from './ui/Input';
 import Button from './ui/Button';
 import FormStatus from './ui/FormStatus';
+import Select from './ui/Select';
 
-interface AddSupervisorPageProps {
+type MenpowerEntryData = Omit<Supervisor, 'id'|'userId'|'foremen'> | Omit<Foreman, 'id'|'labours'> | Omit<Labour, 'id'> | Omit<ProjectOfficer, 'id'|'userId'>;
+type EntryType = 'supervisor' | 'foreman' | 'labour' | 'crewman' | 'campLabour' | 'projectOfficer';
+type EditableForeman = Omit<Foreman, 'id'> & { id?: string };
+
+interface AddMenpowerPageProps {
     lang: Language;
-    onUpdateManPower: (supervisor: Omit<Supervisor, 'id' | 'userId'> & { foremen: Omit<Foreman, 'id'>[] }, campLabour: number, crewman: number) => Promise<void>;
-    onUpdateProjectLabour: (campLabour: number, crewman: number) => Promise<void>;
-    onAddSupervisor: (supervisor: Omit<Supervisor, 'id' | 'userId'> & { foremen: Omit<Foreman, 'id'>[] }) => Promise<void>;
-    onUpdateSupervisor?: (supervisor: Supervisor) => Promise<void>;
+    onAddManPowerEntry: (type: EntryType, data: MenpowerEntryData, parentId?: string) => Promise<void>;
     projectData: ProjectData;
-    editingSupervisor?: Supervisor | null;
-    onClearEditingSupervisor?: () => void;
+    supervisorToEdit?: Supervisor | null;
+    onUpdateSupervisor?: (supervisor: Supervisor) => Promise<void>;
+    onNavigate: (page: Page) => void;
 }
 
-const initialSupervisorState: Omit<Supervisor, 'id' | 'foremen' | 'userId'> = {
+const initialDetailsState = {
     name: '',
-    area: '',
+    empId: '',
     iqama: '',
     mobile: '',
+    area: '',
+    role: '',
+    customRole: '',
 };
 
-const initialForemanState: Omit<Foreman, 'id'> = { name: '', totalLabour: 0 };
-
-const AddSupervisorPage: React.FC<AddSupervisorPageProps> = ({ 
-    lang, 
-    onUpdateManPower, 
-    onUpdateProjectLabour, 
-    onAddSupervisor,
-    onUpdateSupervisor, 
-    projectData,
-    editingSupervisor,
-    onClearEditingSupervisor
-}) => {
-    const [supervisor, setSupervisor] = useState(initialSupervisorState);
-    const [foremen, setForemen] = useState<Omit<Foreman, 'id'>[]>([{ ...initialForemanState }]);
-    const [projectLabour, setProjectLabour] = useState({ campLabour: 0, crewman: 0 });
+const AddMenpowerPage: React.FC<AddMenpowerPageProps> = ({ lang, onAddManPowerEntry, projectData, supervisorToEdit, onUpdateSupervisor, onNavigate }) => {
+    const [entryType, setEntryType] = useState<EntryType>('supervisor');
+    const [details, setDetails] = useState(initialDetailsState);
+    const [supervisorId, setSupervisorId] = useState('');
+    const [foremanId, setForemanId] = useState('');
+    const [foremen, setForemen] = useState<EditableForeman[]>([]); // For edit mode
+    const [editingSupervisor, setEditingSupervisor] = useState<Supervisor | null>(null);
+    
     const [errors, setErrors] = useState<Record<string, any>>({});
     const [formStatus, setFormStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    
+
     const t = useMemo(() => TRANSLATIONS[lang], [lang]);
+    const isEditMode = !!supervisorToEdit || !!editingSupervisor;
 
+    const resetForm = () => {
+        setDetails(initialDetailsState);
+        setSupervisorId('');
+        setForemanId('');
+        setErrors({});
+        setForemen([]);
+    };
+    
+    // Check for editing supervisor data from localStorage
     useEffect(() => {
-        if(projectData) {
-            setProjectLabour({
-                campLabour: projectData.campLabour,
-                crewman: projectData.crewman
-            });
-        }
-    }, [projectData]);
-
-    // Effect to populate form when editing supervisor
-    useEffect(() => {
-        if (editingSupervisor) {
-            setSupervisor({
-                name: editingSupervisor.name,
-                area: editingSupervisor.area,
-                iqama: editingSupervisor.iqama,
-                mobile: editingSupervisor.mobile,
-            });
-            if (editingSupervisor.foremen && editingSupervisor.foremen.length > 0) {
-                setForemen(editingSupervisor.foremen.map(foreman => ({
-                    name: foreman.name,
-                    totalLabour: foreman.totalLabour
-                })));
+        const editingData = localStorage.getItem('editingSupervisor');
+        if (editingData) {
+            try {
+                const supervisor = JSON.parse(editingData) as Supervisor;
+                setEditingSupervisor(supervisor);
+                setEntryType('supervisor');
+                setDetails({
+                    name: supervisor.name,
+                    empId: supervisor.empId,
+                    iqama: supervisor.iqama,
+                    mobile: supervisor.mobile,
+                    area: supervisor.area,
+                    role: '',
+                    customRole: '',
+                });
+                setForemen(supervisor.foremen?.map(f => ({...f, labours: f.labours || []})) || []);
+            } catch (error) {
+                console.error('Error parsing editing supervisor data:', error);
+                localStorage.removeItem('editingSupervisor');
             }
+        }
+    }, []);
+    
+    useEffect(() => {
+        const currentSupervisor = editingSupervisor || supervisorToEdit;
+        if (isEditMode && currentSupervisor) {
+            setEntryType('supervisor');
+            setDetails({
+                name: currentSupervisor.name,
+                empId: currentSupervisor.empId,
+                iqama: currentSupervisor.iqama,
+                mobile: currentSupervisor.mobile,
+                area: currentSupervisor.area,
+                role: '', customRole: '',
+            });
+            setForemen(currentSupervisor.foremen?.map(f => ({...f, labours: f.labours || []})) || []);
         } else {
-            // Reset form when not editing
-            setSupervisor(initialSupervisorState);
-            setForemen([{ ...initialForemanState }]);
+            resetForm();
         }
-    }, [editingSupervisor]);
+    }, [supervisorToEdit, editingSupervisor, isEditMode]);
 
-    const handleSupervisorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+
+    useEffect(() => {
+        // Reset assignments when entry type changes, but not in edit mode
+        if (!isEditMode) {
+            setSupervisorId('');
+            setForemanId('');
+            setErrors({});
+            setDetails(initialDetailsState);
+        }
+    }, [entryType, isEditMode]);
+
+    const handleDetailChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
-        setSupervisor(prev => ({ ...prev, [name]: value }));
-        if (errors.supervisor?.[name]) {
-            setErrors(prev => ({ ...prev, supervisor: { ...prev.supervisor, [name]: '' } }));
+        let finalValue = value;
+        if (name === 'iqama') finalValue = value.replace(/\D/g, '').substring(0, 10);
+        if (name === 'mobile') finalValue = value.replace(/\D/g, '').substring(0, 9);
+        
+        setDetails(prev => {
+            const newState = { ...prev, [name]: finalValue };
+            if (name === 'role' && value !== 'Other') {
+                newState.customRole = '';
+            }
+            return newState;
+        });
+        if (errors[name]) {
+            setErrors(prev => ({ ...prev, [name]: '' }));
         }
     };
-
-    const handleSupervisorIqamaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const value = e.target.value.replace(/\D/g, '').substring(0, 10);
-        setSupervisor(prev => ({ ...prev, iqama: value }));
-        if (errors.supervisor?.iqama) {
-            setErrors(prev => ({ ...prev, supervisor: { ...prev.supervisor, iqama: '' } }));
-        }
-    };
-
-    const handleSupervisorMobileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const value = e.target.value.replace(/\D/g, '').substring(0, 9);
-        setSupervisor(prev => ({ ...prev, mobile: value }));
-        if (errors.supervisor?.mobile) {
-            setErrors(prev => ({ ...prev, supervisor: { ...prev.supervisor, mobile: '' } }));
-        }
-    };
-
-    const handleForemanChange = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    
+    // --- Handlers for Edit Mode ---
+     const handleForemanChange = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
         const newForemen = [...foremen];
-        const val = name === 'totalLabour' ? (parseInt(value, 10) || 0) : value;
-        (newForemen[index] as any)[name] = val;
+        (newForemen[index] as any)[name] = value;
         setForemen(newForemen);
-        
-        if (errors.foremen?.[index]?.[name]) {
-            const newForemenErrors = [...(errors.foremen || [])];
-            if (newForemenErrors[index]) {
-                delete newForemenErrors[index][name];
-            }
-            setErrors(prev => ({ ...prev, foremen: newForemenErrors }));
-        }
     };
-    
-    const handleProjectLabourChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+
+    const handleLabourChange = (foremanIndex: number, labourIndex: number, e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
-        setProjectLabour(prev => ({ ...prev, [name]: parseInt(value, 10) || 0 }));
+        const newForemen = [...foremen];
+        (newForemen[foremanIndex].labours[labourIndex] as any)[name] = value;
+        setForemen(newForemen);
     };
 
     const addForemanRow = () => {
-        setForemen([...foremen, { ...initialForemanState }]);
+        setForemen([...foremen, { name: '', iqama: '', empId: '', labours: [] }]);
     };
 
     const removeForemanRow = (index: number) => {
-        if (foremen.length <= 1) return;
-        const newForemen = foremen.filter((_, i) => i !== index);
+        setForemen(foremen.filter((_, i) => i !== index));
+    };
+
+    const addLabourRow = (foremanIndex: number) => {
+        const newForemen = [...foremen];
+        newForemen[foremanIndex].labours.push({ id: `new-l-${Date.now()}`, name: '', iqama: '', empId: '' });
+        setForemen(newForemen);
+    };
+
+    const removeLabourRow = (foremanIndex: number, labourIndex: number) => {
+        const newForemen = [...foremen];
+        newForemen[foremanIndex].labours = newForemen[foremanIndex].labours.filter((_, i) => i !== labourIndex);
         setForemen(newForemen);
     };
     
-    const resetForm = () => {
-        setSupervisor(initialSupervisorState);
-        setForemen([{ ...initialForemanState }]);
-        // Don't reset project labour, as it should persist.
-        setErrors({});
-    };
-
     const validateForm = (): boolean => {
-        const newErrors: Record<string, any> = { supervisor: {}, foremen: [] };
-        let isValid = true;
-
-        // Iqama is optional but must be 10 digits if provided
-        if (supervisor.iqama && !/^\d{10}$/.test(supervisor.iqama)) {
-            newErrors.supervisor.iqama = t.iqamaInvalid;
-            isValid = false;
-        }
+        const newErrors: Record<string, any> = {};
+        if (!details.name.trim()) newErrors.name = t.requiredField;
         
-        // Mobile is optional, but if provided must start with 5 and be 9 digits
-        if (supervisor.mobile && !/^5\d{8}$/.test(supervisor.mobile)) { 
-            newErrors.supervisor.mobile = t.mobileInvalid; 
-            isValid = false; 
+        const isSupervisorType = entryType === 'supervisor' || isEditMode;
+
+        if (isSupervisorType || entryType === 'projectOfficer') {
+            if (details.iqama && !/^\d{10}$/.test(details.iqama)) { newErrors.iqama = t.iqamaInvalid; }
+            // Mobile is optional
+            // if (details.mobile && !/^5\d{8}$/.test(details.mobile)) { newErrors.mobile = t.mobileInvalid; }
+        } else {
+             if (details.iqama && !/^\d{10}$/.test(details.iqama)) { newErrors.iqama = t.iqamaInvalid; }
         }
 
-        foremen.forEach((foreman, index) => {
-            const foremanErrors: Record<string, string> = {};
-            // Only validate if foreman name is provided (making foremen optional)
-            if (foreman.name.trim()) {
-                if (foreman.totalLabour <= 0) {
-                    foremanErrors.totalLabour = t.requiredField;
-                    isValid = false;
-                }
+        if (entryType === 'projectOfficer') {
+            if (!details.role) {
+                newErrors.role = t.requiredField;
+            } else if (details.role === 'Other' && !details.customRole.trim()) {
+                newErrors.customRole = t.requiredField;
             }
-            if (Object.keys(foremanErrors).length > 0) {
-                newErrors.foremen[index] = foremanErrors;
-            }
-        });
-        
+             if (details.mobile && !/^5\d{8}$/.test(details.mobile)) { newErrors.mobile = t.mobileInvalid; }
+        }
+
+        if (entryType === 'foreman' && !supervisorId) newErrors.supervisorId = t.requiredField;
+        if (entryType === 'labour') {
+            if (!supervisorId) newErrors.supervisorId = t.requiredField;
+            if (!foremanId) newErrors.foremanId = t.requiredField;
+        }
+
         setErrors(newErrors);
-        return isValid;
+        return Object.keys(newErrors).length === 0;
     };
 
     const handleSave = async () => {
@@ -178,127 +199,245 @@ const AddSupervisorPage: React.FC<AddSupervisorPageProps> = ({
         if (validateForm()) {
             setIsSubmitting(true);
             try {
-                const supervisorData = {
-                    ...supervisor,
-                    // Filter out empty foremen (only include foremen with names)
-                    foremen: foremen.filter(f => f.name.trim()),
-                };
+                const currentSupervisor = editingSupervisor || supervisorToEdit;
                 
-                if (editingSupervisor && onUpdateSupervisor) {
-                    // Update existing supervisor
+                if (isEditMode && currentSupervisor && onUpdateSupervisor) {
                     const updatedSupervisor: Supervisor = {
-                        ...supervisorData,
-                        id: editingSupervisor.id,
-                        userId: editingSupervisor.userId,
-                        foremen: supervisorData.foremen.map((foreman, index) => ({
-                            ...foreman,
-                            id: editingSupervisor.foremen?.[index]?.id || `${editingSupervisor.id}_foreman_${index}`
+                        ...currentSupervisor,
+                        name: details.name,
+                        empId: details.empId,
+                        iqama: details.iqama,
+                        mobile: details.mobile,
+                        area: details.area,
+                        foremen: foremen.map((f, fIndex) => ({
+                            ...f,
+                            id: f.id || `f-new-${Date.now()}-${fIndex}`,
+                            labours: (f.labours || []).map((l, lIndex) => ({
+                                ...l,
+                                id: l.id || `l-new-${Date.now()}-${fIndex}-${lIndex}`
+                            }))
                         }))
                     };
                     await onUpdateSupervisor(updatedSupervisor);
-                    setFormStatus({ type: 'success', message: 'Supervisor updated successfully!' });
+                    setFormStatus({ type: 'success', message: t.supervisorUpdateSuccess });
                     
-                    // Clear editing state and go back
-                    if (onClearEditingSupervisor) {
-                        onClearEditingSupervisor();
+                    // Clear localStorage if we were editing from there
+                    if (editingSupervisor) {
+                        localStorage.removeItem('editingSupervisor');
+                        setEditingSupervisor(null);
                     }
+                    
+                    setTimeout(() => onNavigate('viewSupervisors'), 1500);
                 } else {
-                    // Add new supervisor
-                    await onAddSupervisor(supervisorData);
-                    setFormStatus({ type: 'success', message: t.supervisorSaveSuccess });
+                    const dataPayload: Partial<MenpowerEntryData> = { name: details.name, empId: details.empId, iqama: details.iqama };
+                    if (entryType === 'supervisor') {
+                        (dataPayload as Partial<Supervisor>).mobile = details.mobile;
+                        (dataPayload as Partial<Supervisor>).area = details.area;
+                    }
+                    if (entryType === 'projectOfficer') {
+                        (dataPayload as Partial<ProjectOfficer>).mobile = details.mobile;
+                        (dataPayload as Partial<ProjectOfficer>).role = details.role === 'Other' ? details.customRole : details.role;
+                    }
+
+                    let parentId: string | undefined;
+                    if (entryType === 'foreman') parentId = supervisorId;
+                    if (entryType === 'labour') parentId = foremanId;
+
+                    await onAddManPowerEntry(entryType, dataPayload as MenpowerEntryData, parentId);
+                    setFormStatus({ type: 'success', message: t.entrySaveSuccess });
                     resetForm();
+                    setTimeout(() => setFormStatus(null), 5000);
                 }
-                
-                setTimeout(() => setFormStatus(null), 5000);
             } catch (error) {
                 const message = error instanceof Error ? error.message : t.saveError;
                 setFormStatus({ type: 'error', message });
             } finally {
                 setIsSubmitting(false);
             }
+        } else {
+            setFormStatus({ type: 'error', message: t.saveError });
         }
     };
+    
+    const entryTypeOptions = [
+        { value: 'supervisor', label: t.supervisorName },
+        { value: 'foreman', label: t.foreman },
+        { value: 'labour', label: t.labour },
+        { value: 'crewman', label: t.crewman },
+        { value: 'campLabour', label: t.campLabour },
+        { value: 'projectOfficer', label: t.projectOfficer },
+    ];
+    
+    const projectOfficerRoleOptions = PROJECT_OFFICER_ROLES.map(role => ({
+        value: role,
+        label: t[`officerRole_${role.replace(/ /g, '_')}` as keyof typeof t] || role,
+    }));
+    
+    const supervisorOptions = useMemo(() => projectData.supervisors.map(s => ({ value: s.id, label: `${s.name} (${s.empId || s.iqama})` })), [projectData.supervisors]);
+    
+    const foremanOptions = useMemo(() => {
+        if (entryType !== 'labour' || !supervisorId) return [];
+        const supervisor = projectData.supervisors.find(s => s.id === supervisorId);
+        return supervisor?.foremen.map(f => ({
+            value: f.id,
+            label: `${f.name} (${f.empId || f.iqama})`
+        })) || [];
+    }, [supervisorId, entryType, projectData.supervisors]);
 
-    const handleSaveProjectLabour = async () => {
-        if (isSubmitting) return;
-        setFormStatus(null);
-        setIsSubmitting(true);
-        try {
-            await onUpdateProjectLabour(projectLabour.campLabour, projectLabour.crewman);
-            setFormStatus({ type: 'success', message: 'Project labour updated successfully!' });
-            setTimeout(() => setFormStatus(null), 5000);
-        } catch (error) {
-            const message = error instanceof Error ? error.message : t.saveError;
-            setFormStatus({ type: 'error', message });
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
+    const renderSimpleForm = () => (
+        <>
+            <FormSection title={t.entryDetails}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                     <Select
+                        label={t.resourceClassification}
+                        name="entryType"
+                        value={entryType}
+                        onChange={(e) => setEntryType(e.target.value as EntryType)}
+                        options={entryTypeOptions}
+                        required
+                        disabled={isEditMode}
+                    />
+                    {entryType === 'foreman' && (
+                        <Select
+                            label={t.assignToSupervisor}
+                            name="supervisorId"
+                            value={supervisorId}
+                            onChange={(e) => setSupervisorId(e.target.value)}
+                            options={supervisorOptions}
+                            placeholder={t.selectSupervisor}
+                            error={errors.supervisorId}
+                            required
+                        />
+                    )}
+                    {entryType === 'labour' && (
+                        <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <Select
+                                label={t.assignToSupervisor}
+                                name="supervisorId"
+                                value={supervisorId}
+                                onChange={(e) => {
+                                    setSupervisorId(e.target.value);
+                                    setForemanId('');
+                                }}
+                                options={supervisorOptions}
+                                placeholder={t.selectSupervisor}
+                                error={errors.supervisorId}
+                                required
+                            />
+                            <Select
+                                label={t.assignToForeman}
+                                name="foremanId"
+                                value={foremanId}
+                                onChange={(e) => setForemanId(e.target.value)}
+                                options={foremanOptions}
+                                placeholder={supervisorId ? t.selectForeman : t.selectSupervisorPrompt}
+                                error={errors.foremanId}
+                                disabled={!supervisorId}
+                                required
+                            />
+                        </div>
+                    )}
+                </div>
+            </FormSection>
+            <FormSection title={t.personalInfo}>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <Input label={t.personName} name="name" value={details.name} onChange={handleDetailChange} error={errors.name} required />
+                    <Input label={t.employeeId} name="empId" value={details.empId} onChange={handleDetailChange} />
+                    <Input label={t.iqamaNumber} name="iqama" value={details.iqama} onChange={handleDetailChange} maxLength={10} error={errors.iqama} required={entryType === 'supervisor'} />
+                     {(entryType === 'supervisor' || entryType === 'projectOfficer') && (
+                        <Input label={t.officerMobile} name="mobile" value={details.mobile} onChange={handleDetailChange} maxLength={9} placeholder="5XXXXXXXX" error={errors.mobile}/>
+                     )}
+                     {entryType === 'supervisor' && ( <Input label={t.areaLocation} name="area" value={details.area} onChange={handleDetailChange}/> )}
+                     {entryType === 'projectOfficer' && (
+                         <>
+                            <Select label={t.officerRole} name="role" value={details.role} onChange={handleDetailChange} options={projectOfficerRoleOptions} placeholder={t.officerRole} error={errors.role} required />
+                            {details.role === 'Other' && ( <Input label={t.officerRole} name="customRole" value={details.customRole} onChange={handleDetailChange} error={errors.customRole} required /> )}
+                         </>
+                     )}
+                </div>
+            </FormSection>
+        </>
+    );
 
-    return (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 sm:p-8 md:p-10 max-w-4xl mx-auto">
-            <header className="border-b-2 border-blue-500 pb-6 mb-10">
-                <h2 className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-                    {editingSupervisor ? 'Edit Supervisor' : t.addSupervisorTitle}
-                </h2>
-            </header>
-
-            {formStatus && <FormStatus type={formStatus.type} message={formStatus.message} />}
-
-            <form noValidate>
-                 <FormSection title={t.projectLevelLabour}>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <Input label={t.campLabour} name="campLabour" type="number" value={String(projectLabour.campLabour)} onChange={handleProjectLabourChange} />
-                        <Input label={t.crewman} name="crewman" type="number" value={String(projectLabour.crewman)} onChange={handleProjectLabourChange} />
-                    </div>
-                    <div className="flex justify-end mt-4">
-                        <Button type="button" variant="info" onClick={handleSaveProjectLabour} disabled={isSubmitting}>
-                            {isSubmitting ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-save me-2"></i> Save Project Labour</>}
-                        </Button>
-                    </div>
-                </FormSection>
-
-                <FormSection title={t.supervisorInfo}>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <Input label={t.supervisorName} name="name" value={supervisor.name} onChange={handleSupervisorChange} error={errors.supervisor?.name} />
-                        <Input label={t.areaLocation} name="area" value={supervisor.area} onChange={handleSupervisorChange} error={errors.supervisor?.area} />
-                        <Input label={t.supervisorIqama} name="iqama" value={supervisor.iqama} onChange={handleSupervisorIqamaChange} error={errors.supervisor?.iqama} maxLength={10} />
-                        <Input label={t.supervisorMobile} name="mobile" value={supervisor.mobile} onChange={handleSupervisorMobileChange} error={errors.supervisor?.mobile} maxLength={9} placeholder="5XXXXXXXX" />
-                    </div>
-                </FormSection>
-                
-                <FormSection title={t.foremenInfo}>
-                    {foremen.map((foreman, index) => (
-                        <div key={index} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start mb-4 pb-4 border-b border-gray-200 dark:border-gray-700 last:border-b-0 last:mb-0 last:pb-0">
-                           <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <Input label={t.foremanName} name="name" value={foreman.name} onChange={(e) => handleForemanChange(index, e)} error={errors.foremen?.[index]?.name} />
-                                <Input label={t.totalAssignedLabour} name="totalLabour" type="number" value={String(foreman.totalLabour)} onChange={(e) => handleForemanChange(index, e)} error={errors.foremen?.[index]?.totalLabour} />
-                           </div>
-                            <div className="flex items-end h-full">
-                                <Button type="button" variant="secondary" onClick={() => removeForemanRow(index)} disabled={foremen.length <= 1} className="!min-w-0 !px-4 !py-2 bg-red-500 hover:bg-red-600 focus:ring-red-300 disabled:bg-gray-300 dark:disabled:bg-gray-600">
+    const renderEditForm = () => (
+        <>
+             <FormSection title={t.supervisorInfo}>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <Input label={t.supervisorName} name="name" value={details.name} onChange={handleDetailChange} required />
+                    <Input label={t.supervisorEmpId} name="empId" value={details.empId} onChange={handleDetailChange} />
+                    <Input label={t.areaLocation} name="area" value={details.area} onChange={handleDetailChange} />
+                    <Input label={t.supervisorIqama} name="iqama" value={details.iqama} onChange={handleDetailChange} maxLength={10} error={errors.iqama} />
+                    <Input label={t.supervisorMobile} name="mobile" value={details.mobile} onChange={handleDetailChange} maxLength={9} placeholder="5XXXXXXXX" error={errors.mobile}/>
+                </div>
+            </FormSection>
+            <FormSection title={t.foremenInfo}>
+                 {foremen.map((foreman, fIndex) => (
+                     <div key={foreman.id || `new-f-${fIndex}`} className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg mb-4">
+                        <div className="grid grid-cols-12 gap-4 items-start pb-4 border-b border-gray-200 dark:border-gray-700">
+                            <div className="col-span-11 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <Input label={t.foremanName} name="name" value={foreman.name} onChange={(e) => handleForemanChange(fIndex, e)} required />
+                                <Input label={t.foremanIqama} name="iqama" value={foreman.iqama} onChange={(e) => handleForemanChange(fIndex, e)} />
+                                <Input label={t.foremanEmpId} name="empId" value={foreman.empId} onChange={(e) => handleForemanChange(fIndex, e)} />
+                            </div>
+                            <div className="col-span-1 flex items-end h-full">
+                                 <Button type="button" variant="secondary" onClick={() => removeForemanRow(fIndex)} className="!min-w-0 !px-4 !py-2 bg-red-500 hover:bg-red-600 focus:ring-red-300">
                                     <i className="fas fa-trash"></i>
                                 </Button>
                             </div>
                         </div>
-                    ))}
-                     <Button type="button" variant="info" onClick={addForemanRow} className="mt-4">
-                        <i className="fas fa-plus me-2"></i> {t.addForeman}
-                    </Button>
-                </FormSection>
+                        <div className="pt-4">
+                            <h6 className="font-semibold text-sm mb-2 text-gray-700 dark:text-gray-300">{t.labour} ({foreman.labours.length})</h6>
+                            {foreman.labours.map((labour, lIndex) => (
+                                 <div key={labour.id || `new-l-${lIndex}`} className="grid grid-cols-12 gap-2 items-center mb-2">
+                                    <div className="col-span-11 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                        <Input name="name" placeholder={t.labourName} value={labour.name} onChange={e => handleLabourChange(fIndex, lIndex, e)} className="!h-9 text-sm" />
+                                        <Input name="iqama" placeholder={t.labourIqama} value={labour.iqama} onChange={e => handleLabourChange(fIndex, lIndex, e)} className="!h-9 text-sm" />
+                                        <Input name="empId" placeholder={t.labourEmpId} value={labour.empId} onChange={e => handleLabourChange(fIndex, lIndex, e)} className="!h-9 text-sm" />
+                                    </div>
+                                    <div className="col-span-1">
+                                        <button type="button" onClick={() => removeLabourRow(fIndex, lIndex)} className="text-gray-400 hover:text-red-500 w-full"><i className="fas fa-minus-circle"></i></button>
+                                    </div>
+                                 </div>
+                            ))}
+                            <Button type="button" variant="info" onClick={() => addLabourRow(fIndex)} className="!px-3 !py-1 text-xs mt-2">
+                                <i className="fas fa-plus me-2"></i> {t.addLabour}
+                            </Button>
+                        </div>
+                     </div>
+                ))}
+                <Button type="button" variant="info" onClick={addForemanRow} className="mt-4">
+                    <i className="fas fa-plus me-2"></i> {t.addForeman}
+                </Button>
+            </FormSection>
+        </>
+    );
 
-                <div className="flex justify-end gap-4 mt-8">
-                    <Button type="button" variant="secondary" onClick={() => {
-                        if (editingSupervisor && onClearEditingSupervisor) {
-                            onClearEditingSupervisor();
-                            window.history.back();
-                        } else {
-                            window.history.back();
-                        }
-                    }}>
-                        <i className="fas fa-times me-2"></i> {t.cancel}
+    const handleCancel = () => {
+        // Clear localStorage if we were editing from there
+        if (editingSupervisor) {
+            localStorage.removeItem('editingSupervisor');
+            setEditingSupervisor(null);
+        }
+        onNavigate(isEditMode ? 'viewSupervisors' : 'menpowerOverview');
+    };
+
+    return (
+        <div className="w-full bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md border border-gray-100 dark:border-gray-700 p-4 sm:p-6 transition-all duration-200">
+            <div className="flex flex-wrap justify-between items-center mb-5 pb-4 border-b border-gray-100 dark:border-gray-700 gap-4">
+                <h2 className="text-2xl sm:text-3xl font-bold text-orange-600 dark:text-orange-400">{isEditMode ? t.editSupervisorTitle : t.addMenpowerTitle}</h2>
+            </div>
+
+            {formStatus && <FormStatus type={formStatus.type} message={formStatus.message} />}
+
+            <form noValidate>
+                {isEditMode ? renderEditForm() : renderSimpleForm()}
+
+                <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100 dark:border-gray-700">
+                    <Button type="button" variant="secondary" onClick={handleCancel}>
+                        <i className="fas fa-times me-1.5"></i> {t.cancel}
                     </Button>
                     <Button type="button" variant="success" onClick={handleSave} disabled={isSubmitting}>
-                        {isSubmitting ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-save me-2"></i> {editingSupervisor ? 'Update Supervisor' : t.saveSupervisor}</>}
+                        {isSubmitting ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-save me-1.5"></i> {isEditMode ? t.saveChanges : t.saveEntry}</>}
                     </Button>
                 </div>
             </form>
@@ -306,4 +445,4 @@ const AddSupervisorPage: React.FC<AddSupervisorPageProps> = ({
     );
 };
 
-export default AddSupervisorPage;
+export default AddMenpowerPage;

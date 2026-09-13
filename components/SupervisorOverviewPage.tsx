@@ -1,218 +1,160 @@
-
 import React, { useMemo, useState } from 'react';
 import { TRANSLATIONS } from '../constants';
-import type { Language, ProjectData, Supervisor, Foreman } from '../types';
+import type { Language, ProjectData, Page } from '../types';
 import StatCard from './ui/StatCard';
-import Table, { type Column } from './ui/Table';
-import ConfirmationModal from './ui/ConfirmationModal';
-import EditSupervisorModal from './EditSupervisorModal';
+import { exportToExcel } from '../utils/export';
+import Button from './ui/Button';
+import { ViewAllForemenPage } from './ViewAllForemenPage';
+import { ViewAllLabourPage } from './ViewAllLabourPage';
 
-interface SupervisorOverviewPageProps {
+interface MenpowerOverviewPageProps {
     lang: Language;
     projectData: ProjectData;
-    onUpdateSupervisor: (supervisor: Supervisor) => Promise<void>;
-    onDeleteSupervisor: (supervisorId: string) => Promise<void>;
-    onEditSupervisor?: (supervisor: Supervisor) => void;
-    isReadOnly?: boolean;
+    onNavigate: (page: Page) => void;
+    onImportForemen?: (data: any[], onProgress?: (percent: number) => void) => Promise<{ success: boolean, error?: string }>;
+    onImportLabour?: (data: any[], onProgress?: (percent: number) => void) => Promise<{ success: boolean, error?: string }>;
+    onDeleteSelectedForemen?: (foremanIds: string[]) => Promise<void>;
+    onDeleteSelectedLabour?: (labourIds: string[]) => Promise<void>;
 }
 
-const SupervisorOverviewPage: React.FC<SupervisorOverviewPageProps> = ({ lang, projectData, onUpdateSupervisor, onDeleteSupervisor, onEditSupervisor, isReadOnly = false }) => {
+const MenpowerOverviewPage: React.FC<MenpowerOverviewPageProps> = ({ lang, projectData, onNavigate, onImportForemen, onImportLabour, onDeleteSelectedForemen, onDeleteSelectedLabour }) => {
     const t = useMemo(() => TRANSLATIONS[lang], [lang]);
+    const [currentView, setCurrentView] = useState<'overview' | 'allForemen' | 'allLabour'>('overview');
     
-    const { supervisors = [], campLabour, crewman } = projectData;
+    const { supervisors, campLabours, crewmen, projectOfficers } = projectData;
 
-    const [supervisorToEdit, setSupervisorToEdit] = useState<Supervisor | null>(null);
-    const [supervisorToDelete, setSupervisorToDelete] = useState<Supervisor | null>(null);
-    const [actionError, setActionError] = useState<string | null>(null);
-    const [isDeleting, setIsDeleting] = useState(false);
-
-    const handleConfirmDelete = async () => {
-        setActionError(null);
-        if (supervisorToDelete) {
-            setIsDeleting(true);
-            try {
-                console.log('🗑️ Confirming deletion of supervisor:', supervisorToDelete.id);
-                await onDeleteSupervisor(supervisorToDelete.id);
-                console.log('✅ Supervisor deletion confirmed');
-                setSupervisorToDelete(null);
-            } catch (e) {
-                const message = e instanceof Error ? e.message : "Failed to delete supervisor.";
-                console.error("Delete supervisor error:", e);
-                setActionError(message);
-            } finally {
-                setIsDeleting(false);
+    const menPowerStats = useMemo(() => {
+        const totalForemen = supervisors.reduce((sum, s) => sum + (s.foremen?.length || 0), 0);
+        const totalLabour = supervisors.flatMap(s => s.foremen || []).reduce((sum, f) => sum + (f.labours?.length || 0), 0);
+        return {
+            totalSupervisors: supervisors.length,
+            totalForemen,
+            totalOfficers: projectOfficers.length,
+            totalLabour,
+        };
+    }, [supervisors, projectOfficers]);
+    
+    const handleExport = (type: 'supervisors' | 'foremen' | 'officers' | 'campLabour' | 'crewmen' | 'all' | 'labour') => {
+        
+        const getHeaders = (exportType: typeof type) => {
+            switch(exportType) {
+                case 'supervisors': return { Name: "", EmployeeID: "", Iqama: "", Mobile: "", Area: "" };
+                case 'foremen': return { Name: "", EmployeeID: "", Iqama: "", Supervisor: "" };
+                case 'labour': return { Name: "", EmployeeID: "", Iqama: "", Foreman: "", Supervisor: "" };
+                case 'officers': return { Role: "", Name: "", Iqama: "", Mobile: "" };
+                case 'campLabour':
+                case 'crewmen': return { Name: "", EmployeeID: "", Iqama: "" };
+                case 'all': return { Type: "", Role: "", Name: "", EmployeeID: "", Iqama: "", Mobile: "", ReportsTo: "" };
             }
         }
+
+        const getData = () => {
+             switch (type) {
+                case 'supervisors':
+                    return supervisors.length > 0 ? supervisors.map(s => ({ Name: s.name, EmployeeID: s.empId, Iqama: s.iqama, Mobile: s.mobile, Area: s.area })) : [getHeaders(type)];
+                case 'foremen':
+                    const foremenData = supervisors.flatMap(s => s.foremen.map(f => ({ Name: f.name, EmployeeID: f.empId, Iqama: f.iqama, Supervisor: s.name })));
+                    return foremenData.length > 0 ? foremenData : [getHeaders(type)];
+                case 'labour':
+                    const labourData = supervisors.flatMap(s => s.foremen.flatMap(f => f.labours.map(l => ({ Name: l.name, EmployeeID: l.empId, Iqama: l.iqama, Foreman: f.name, Supervisor: s.name }))));
+                    return labourData.length > 0 ? labourData : [getHeaders(type)];
+                case 'officers':
+                    return projectOfficers.length > 0 ? projectOfficers.map(o => ({ Role: o.role, Name: o.name, Iqama: o.iqama, Mobile: o.mobile })) : [getHeaders(type)];
+                case 'campLabour':
+                    return campLabours.length > 0 ? campLabours.map(c => ({ Name: c.name, EmployeeID: c.empId, Iqama: c.iqama })) : [getHeaders(type)];
+                case 'crewmen':
+                    return crewmen.length > 0 ? crewmen.map(c => ({ Name: c.name, EmployeeID: c.empId, Iqama: c.iqama })) : [getHeaders(type)];
+                case 'all':
+                    const allData = [
+                        ...supervisors.map(s => ({ Type: 'Supervisor', Role: '', Name: s.name, EmployeeID: s.empId, Iqama: s.iqama, Mobile: s.mobile, ReportsTo: '' })),
+                        ...projectOfficers.map(o => ({ Type: 'Project Officer', Role: o.role, Name: o.name, EmployeeID: '', Iqama: o.iqama, Mobile: o.mobile, ReportsTo: '' })),
+                        ...supervisors.flatMap(s => s.foremen.map(f => ({ Type: 'Foreman', Role: '', Name: f.name, EmployeeID: f.empId, Iqama: f.iqama, Mobile: '', ReportsTo: s.name }))),
+                        ...supervisors.flatMap(s => s.foremen.flatMap(f => f.labours.map(l => ({ Type: 'Labour', Role: '', Name: l.name, EmployeeID: l.empId, Iqama: l.iqama, Mobile: '', ReportsTo: f.name })))),
+                        ...crewmen.map(c => ({ Type: 'Crewman', Role: '', Name: c.name, EmployeeID: c.empId, Iqama: c.iqama, Mobile: '', ReportsTo: '' })),
+                        ...campLabours.map(cl => ({ Type: 'Camp Labour', Role: '', Name: cl.name, EmployeeID: cl.empId, Iqama: cl.iqama, Mobile: '', ReportsTo: '' })),
+                    ];
+                    return allData.length > 0 ? allData : [getHeaders(type)];
+                 default:
+                    return [];
+            }
+        }
+        
+        exportToExcel(getData(), `${type}.xlsx`);
     };
 
-    const handleSaveUpdate = async (updatedSupervisor: Supervisor) => {
-        await onUpdateSupervisor(updatedSupervisor);
-        setSupervisorToEdit(null);
-    };
 
-    const foremenColumns: Column<Foreman>[] = useMemo(() => [
-        { key: 'name', header: t.foremanName, sortable: true },
-        { key: 'totalLabour', header: t.totalAssignedLabour, sortable: true },
-    ], [t]);
+    const NavigableRow: React.FC<{ icon: string; iconColor: string; title: string; count: number; onClick: () => void; }> = ({ icon, iconColor, title, count, onClick }) => (
+         <div onClick={onClick} className="p-4 cursor-pointer flex justify-between items-center bg-white dark:bg-gray-800 rounded-lg shadow-md hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-200">
+            <div className="flex items-center gap-4">
+                <i className={`fas ${icon} text-xl ${iconColor}`}></i>
+                <p className="font-semibold text-lg text-gray-800 dark:text-gray-200">{title} ({count})</p>
+            </div>
+            <div className="ms-4 text-gray-400">
+                <i className="fas fa-chevron-right"></i>
+            </div>
+        </div>
+    );
+
+        // Handle different views
+    if (currentView === 'allForemen') {
+        return <ViewAllForemenPage 
+          onBack={() => setCurrentView('overview')} 
+          lang={lang}
+          onImportForemen={onImportForemen}
+          onDeleteSelectedForemen={onDeleteSelectedForemen}
+        />;
+    }
+
+    if (currentView === 'allLabour') {
+        return <ViewAllLabourPage 
+          onBack={() => setCurrentView('overview')} 
+          lang={lang}
+          onImportLabour={onImportLabour}
+          onDeleteSelectedLabour={onDeleteSelectedLabour}
+        />;
+    }
 
     return (
-        <div className="space-y-8 max-w-7xl mx-auto">
-            <header>
-                <h1 className="text-4xl font-bold text-gray-800 dark:text-gray-200 tracking-tight">{t.supervisorOverviewTitle}</h1>
+        <div className="space-y-6 w-full">
+            <header className="flex flex-wrap justify-between items-center gap-4">
+                <h1 className="text-4xl font-bold text-gray-800 dark:text-gray-200 tracking-tight">{t.menpowerOverviewTitle}</h1>
+                 <Button variant="success" onClick={() => handleExport('all')}>
+                    <i className="fas fa-file-excel me-2"></i> {t.exportAllMenpower}
+                </Button>
             </header>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatCard title={t.campLabour} value={campLabour} icon="fa-campground" color="blue" />
-                <StatCard title={t.crewman} value={crewman} icon="fa-hard-hat" color="green" />
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-6">
+                <div className="cursor-pointer" onClick={() => handleExport('supervisors')}><StatCard title={t.totalSupervisors} value={menPowerStats.totalSupervisors} icon="fa-user-tie" color="orange" /></div>
+                <div className="cursor-pointer" onClick={() => handleExport('foremen')}><StatCard title={t.totalForemen} value={menPowerStats.totalForemen} icon="fa-users" color="green" /></div>
+                <div className="cursor-pointer" onClick={() => handleExport('labour')}><StatCard title={t.totalLabour} value={menPowerStats.totalLabour} icon="fa-hard-hat" color="yellow" /></div>
+                <div className="cursor-pointer" onClick={() => handleExport('officers')}><StatCard title={t.totalOfficers} value={menPowerStats.totalOfficers} icon="fa-user-shield" color="red" /></div>
+                <div className="cursor-pointer" onClick={() => handleExport('campLabour')}><StatCard title={t.campLabour} value={campLabours.length} icon="fa-campground" color="orange" /></div>
+                <div className="cursor-pointer" onClick={() => handleExport('crewmen')}><StatCard title={t.crewman} value={crewmen.length} icon="fa-hard-hat" color="green" /></div>
+            </div>
+
+            {/* Manpower Summary Card - Separate Row */}
+            <div className="mt-6">
+                <div className="cursor-pointer" onClick={() => onNavigate('manpowerSummary')}>
+                    <StatCard 
+                        title={t.viewManpowerSummary} 
+                        value="📊" 
+                        icon="fa-sitemap" 
+                        color="blue" 
+                    />
+                </div>
             </div>
 
             <div className="space-y-4">
-                {supervisors.length > 0 ? (
-                    supervisors
-                        .filter(supervisor => supervisor && supervisor.id && supervisor.name) // Filter out invalid supervisors
-                        .map(supervisor => {
-                        const totalLabour = supervisor.foremen ? supervisor.foremen.reduce((sum, foreman) => sum + (foreman.totalLabour || 0), 0) : 0;
-
-                        return (
-                            <details key={supervisor.id} className="group bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden transition-all duration-300">
-                                <summary className="p-4 cursor-pointer list-none flex justify-between items-center hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 flex-grow">
-                                        <div>
-                                            <p className="text-xs text-gray-500">{t.supervisorName}</p>
-                                            <p className="font-semibold text-gray-800 dark:text-gray-200">{supervisor.name}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs text-gray-500">{t.areaLocation}</p>
-                                            <p className="font-semibold text-gray-800 dark:text-gray-200">{supervisor.area || 'N/A'}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs text-gray-500">{t.supervisorIqama}</p>
-                                            <p className="font-semibold text-gray-800 dark:text-gray-200">{supervisor.iqama}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs text-gray-500">{t.supervisorMobile}</p>
-                                            <p className="font-semibold text-gray-800 dark:text-gray-200">{supervisor.mobile ? `+966 ${supervisor.mobile}` : 'N/A'}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs text-gray-500">{t.totalLabour}</p>
-                                            <p className="font-bold text-lg text-blue-600 dark:text-blue-400">{totalLabour}</p>
-                                        </div>
-                                    </div>
-                                    {!isReadOnly && (
-                                        <div className="flex items-center space-x-2 rtl:space-x-reverse mx-4">
-                                            <button 
-                                                onClick={(e) => { 
-                                                    e.preventDefault(); 
-                                                    // Only allow edit if supervisor has valid ID and exists
-                                                    if (supervisor.id && supervisor.name) {
-                                                        if (onEditSupervisor) {
-                                                            // Navigate to Add Supervisor page with pre-filled data
-                                                            onEditSupervisor(supervisor);
-                                                        } else {
-                                                            // Fallback to modal edit
-                                                            setSupervisorToEdit(supervisor);
-                                                        }
-                                                    } else {
-                                                        console.warn('Cannot edit supervisor with invalid ID:', supervisor);
-                                                    }
-                                                }} 
-                                                className="text-blue-500 hover:text-blue-700 p-2" 
-                                                title={t.editSupervisorTitle}
-                                                disabled={!supervisor.id || !supervisor.name}
-                                            >
-                                                <i className="fas fa-edit"></i>
-                                            </button>
-                                            <button 
-                                                onClick={(e) => { 
-                                                    e.preventDefault(); 
-                                                    // Only allow delete if supervisor has valid ID
-                                                    if (supervisor.id && supervisor.name) {
-                                                        setSupervisorToDelete(supervisor); 
-                                                    } else {
-                                                        console.warn('Cannot delete supervisor with invalid ID:', supervisor);
-                                                    }
-                                                }} 
-                                                className="text-red-500 hover:text-red-700 p-2" 
-                                                title={t.deleteSupervisorTitle}
-                                                disabled={!supervisor.id || !supervisor.name}
-                                            >
-                                                <i className="fas fa-trash"></i>
-                                            </button>
-                                        </div>
-                                    )}
-                                    <div className="ms-4 text-gray-400 group-open:rotate-90 transform transition-transform">
-                                        <i className="fas fa-chevron-right"></i>
-                                    </div>
-                                </summary>
-                                <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-                                    <h4 className="font-semibold mb-2 text-gray-700 dark:text-gray-300">{t.foremenInfo}</h4>
-                                    <Table<Foreman>
-                                        columns={foremenColumns}
-                                        data={supervisor.foremen.map((foreman, index) => ({
-                                            ...foreman,
-                                            id: foreman.id || `${supervisor.id}-foreman-${index}`
-                                        }))}
-                                        initialSortKey="name"
-                                    />
-                                </div>
-                            </details>
-                        );
-                    })
-                ) : (
-                    <div className="text-center py-16 text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded-lg shadow-md">
-                        <i className="fas fa-user-tie text-4xl mb-4"></i>
-                        <p className="text-lg">{t.noSupervisorsFound}</p>
-                    </div>
-                )}
+                <NavigableRow icon="fa-user-tie" iconColor="text-orange-600 dark:text-orange-400" title={t.totalSupervisors} count={supervisors.length} onClick={() => onNavigate('viewSupervisors')} />
+                <NavigableRow icon="fa-users" iconColor="text-green-600 dark:text-green-400" title={t.totalForemen} count={menPowerStats.totalForemen} onClick={() => setCurrentView('allForemen')} />
+                <NavigableRow icon="fa-user-shield" iconColor="text-yellow-600 dark:text-yellow-400" title={t.projectOfficer} count={projectOfficers.length} onClick={() => onNavigate('viewProjectOfficers')} />
+                <NavigableRow icon="fa-hard-hat" iconColor="text-amber-600 dark:text-amber-400" title={t.totalLabour} count={menPowerStats.totalLabour} onClick={() => setCurrentView('allLabour')} />
+                <NavigableRow icon="fa-hard-hat" iconColor="text-green-600 dark:text-green-400" title={t.crewman} count={crewmen.length} onClick={() => onNavigate('viewCrewmen')} />
+                <NavigableRow icon="fa-campground" iconColor="text-orange-600 dark:text-orange-400" title={t.campLabour} count={campLabours.length} onClick={() => onNavigate('viewCampLabours')} />
             </div>
 
-            {!isReadOnly && (
-                <>
-                    <EditSupervisorModal
-                        isOpen={!!supervisorToEdit}
-                        onClose={() => setSupervisorToEdit(null)}
-                        onSave={handleSaveUpdate}
-                        supervisor={supervisorToEdit}
-                        lang={lang}
-                    />
-
-                    {supervisorToDelete && (
-                        <ConfirmationModal
-                            isOpen={!!supervisorToDelete}
-                            onClose={() => { 
-                                if (!isDeleting) {
-                                    setSupervisorToDelete(null); 
-                                    setActionError(null); 
-                                }
-                            }}
-                            onConfirm={handleConfirmDelete}
-                            title={t.deleteSupervisorTitle}
-                            message={
-                                <>
-                                    {actionError && <p className="text-red-500 mb-2">{actionError}</p>}
-                                    {isDeleting ? (
-                                        <div className="flex items-center gap-2 text-blue-600">
-                                            <i className="fas fa-spinner fa-spin"></i>
-                                            <span>{lang === 'ar' ? 'جاري الحذف...' : 'Deleting supervisor...'}</span>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            {t.deleteSupervisorMessage}
-                                            <br/>
-                                            <span className="font-semibold">{supervisorToDelete.name}</span>
-                                        </>
-                                    )}
-                                </>
-                            }
-                            confirmButtonText={isDeleting ? (lang === 'ar' ? 'جاري الحذف...' : 'Deleting...') : t.confirmDelete}
-                            cancelButtonText={t.cancel}
-                            isLoading={isDeleting}
-                        />
-                    )}
-                </>
-            )}
         </div>
     );
 };
 
-export default SupervisorOverviewPage;
+export default MenpowerOverviewPage;

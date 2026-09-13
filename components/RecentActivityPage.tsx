@@ -1,16 +1,6 @@
-
 import React, { useMemo, useState, useEffect } from 'react';
 import { TRANSLATIONS } from '../constants';
-import type { Language } from '../types';
-
-// FIX: HistoryEvent is no longer exported from types.ts, so it is defined locally.
-export type EventType = 'CREATED' | 'UPDATED' | 'DELETED' | 'ASSIGNED' | 'UNASSIGNED' | 'TRANSFERRED';
-
-export interface HistoryEvent {
-  timestamp: string;
-  eventType: EventType;
-  details: string;
-}
+import type { Language, HistoryEvent } from '../types';
 
 interface RecentActivityPageProps {
     lang: Language;

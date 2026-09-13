@@ -2,7 +2,7 @@ export type Language = 'en' | 'ar';
 
 export type Theme = 'light' | 'dark';
 
-export type Page = 'dashboard' | 'addVehicle' | 'viewVehicles' | 'viewVehicleDetails' | 'addDriver' | 'viewDrivers' | 'reportIncident' | 'reports' | 'settings' | 'adminDashboard' | 'transferVehicle' | 'addSupervisor' | 'supervisorOverview' | 'addProjectOfficers' | 'viewProjectOfficers' | 'adminTransferLog' | 'adminAllProjects' | 'adminAllIncidents' | 'adminAllVehicles';
+export type Page = 'dashboard' | 'addVehicle' | 'viewVehicles' | 'viewVehicleDetails' | 'addDriver' | 'viewDrivers' | 'reportIncident' | 'vehicleHistory' | 'settings' | 'adminDashboard' | 'transferVehicle' | 'addMenpower' | 'menpowerOverview' | 'addProjectOfficers' | 'viewProjectOfficers' | 'adminTransferLog' | 'adminAllProjects' | 'adminAllIncidents' | 'adminAllVehicles' | 'viewCrewmen' | 'viewCampLabours' | 'viewSupervisors' | 'adminAllMenpower' | 'adminAllDrivers' | 'adminAllMenpowerReport' | 'dynamicJson' | 'manpowerSummary' | 'manpowerAssign' | 'allForemen' | 'allLabour' | 'adminAllForemen' | 'adminAllLabour';
 
 export interface User {
   uid?: string;
@@ -13,7 +13,6 @@ export interface User {
   email: string;
   password: string; // In a real app, this would be a hash
   isAdmin?: boolean;
-  securityQuestion?: string;
   securityAnswer?: string;
 }
 
@@ -22,14 +21,16 @@ export interface Driver {
   driverName: string;
   nationality: string;
   driverIqama: string;
+  driverIdNumber: string; // ID Number field - required
   driverMobile: string;
   assignedVehicle: string; // Vehicle ID
+  vehicleId?: string; // Also support vehicleId for compatibility
   userId?: string;
   createdAt?: string;
   updatedAt?: string;
 }
 
-export type VehicleStatus = 'Active' | 'Accident' | 'Not Working';
+export type VehicleStatus = 'Active' | 'active' | 'Accident' | 'Breakdown' | 'Under Maintenance' | string;
 
 export interface Vehicle {
   id: string;
@@ -44,8 +45,7 @@ export interface Vehicle {
   serviceType: string;
   projectSite: string;
   status: VehicleStatus;
-  isDuplicate?: boolean;
-  duplicateOf?: string; // ID of the original vehicle if this is a duplicate
+  inWorkshop?: boolean; // Track if vehicle is in workshop
   userId?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -54,18 +54,32 @@ export interface Vehicle {
 export interface NavLink {
   href: string;
   icon: string;
-  labelKey: Page | 'logout' | 'menPower' | 'vehicleFleet' | 'projectOfficersHeader' | 'adminReports';
+  labelKey: Page | 'logout' | 'menpower' | 'vehicleFleet' | 'projectOfficersHeader' | 'adminReports' | 'dynamicJson';
   type?: 'link' | 'header';
   adminOnly?: boolean;
+}
+
+export type EventType = 'CREATED' | 'UPDATED' | 'DELETED' | 'ASSIGNED' | 'UNASSIGNED' | 'TRANSFERRED';
+
+export interface HistoryEvent {
+  timestamp: string;
+  eventType: EventType;
+  details: string;
 }
 
 export interface Incident {
     id: string;
     vehicleId: string;
-    type: 'Accident' | 'Not Working';
+    type: string;
     date: string;
     description: string;
+    affectedPart?: string;
+    driverId?: string;
     userId?: string;
+    resolvedAt?: string;
+    resolvedBy?: string;
+    notes?: string;
+    status?: 'Open' | 'Resolved';
 }
 
 export type TransferStatus = 'Transferred' | 'Returned';
@@ -79,10 +93,22 @@ export interface Transfer {
     status: TransferStatus;
 }
 
+export interface Labour {
+    id: string;
+    name: string;
+    iqama: string;
+    empId: string;
+    idNumber?: string;
+    userId?: string;
+}
+
 export interface Foreman {
     id: string;
     name: string;
-    totalLabour: number;
+    iqama: string;
+    empId: string;
+    idNumber?: string;
+    labours: Labour[];
 }
 
 export interface Supervisor {
@@ -91,13 +117,14 @@ export interface Supervisor {
     area: string;
     iqama: string;
     mobile: string;
+    empId: string;
+    idNumber?: string;
     foremen: Foreman[];
     userId?: string;
 }
 
 export interface ProjectMetadata {
-    campLabour: number;
-    crewman: number;
+    // These have been removed and are now derived from campLabours.length and crewmen.length
 }
 
 export type NotificationType = 'VEHICLE_SENT' | 'VEHICLE_RETURNED';
@@ -120,16 +147,32 @@ export interface ProjectOfficer {
   role: ProjectOfficerRole;
   name: string;
   iqama: string;
+  idNumber?: string;
   mobile: string;
   userId?: string;
 }
 
-export interface ProjectData extends ProjectMetadata {
+export interface RepairHistory {
+  id: string;
+  vehicleId: string;
+  repairedAt: string; // ISO string
+  repairedBy: string;
+  repairNotes?: string;
+  originalIncident?: Incident;
+  userId?: string;
+  timestamp: string; // ISO string
+}
+
+
+export interface ProjectData {
   vehicles: Vehicle[];
   drivers: Driver[];
   incidents: Incident[];
   transfers: Transfer[];
   supervisors: Supervisor[];
+  crewmen: Labour[];
+  campLabours: Labour[];
   notifications: AdminNotification[];
   projectOfficers: ProjectOfficer[];
+  repairHistory: RepairHistory[];
 }

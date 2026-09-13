@@ -18,6 +18,7 @@ const initialDriverState: Omit<Driver, 'id'> = {
     driverName: '',
     nationality: '',
     driverIqama: '',
+    driverIdNumber: '',
     driverMobile: '',
     assignedVehicle: ''
 };
@@ -76,6 +77,10 @@ const AddDriverForm: React.FC<AddDriverFormProps> = ({ lang, onAddDriver, vehicl
             newErrors.driverIqama = t.iqamaInvalid;
         }
 
+        if (!driver.driverIdNumber.trim()) {
+            newErrors.driverIdNumber = t.requiredField;
+        }
+
         // Mobile is optional, but validate if entered
         if (driver.driverMobile && !/^5\d{8}$/.test(driver.driverMobile)) {
             newErrors.driverMobile = t.mobileInvalid;
@@ -116,11 +121,21 @@ const AddDriverForm: React.FC<AddDriverFormProps> = ({ lang, onAddDriver, vehicl
         }
     };
 
+    const handleCancel = () => {
+        setDriver(initialDriverState);
+        setErrors({});
+        setFormStatus(null);
+        setVehicleSearchTerm('');
+        if (window.history.length > 1) {
+            window.history.back();
+        }
+    };
+
     return (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 sm:p-8 md:p-10 max-w-4xl mx-auto">
-            <header className="flex flex-wrap justify-between items-center border-b-2 border-blue-500 pb-6 mb-10">
-                <h2 className="text-3xl font-bold text-blue-600 dark:text-blue-400">{t.addDriverTitle}</h2>
-            </header>
+        <div className="w-full bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md border border-gray-100 dark:border-gray-700 p-4 sm:p-6 transition-all duration-200">
+            <div className="flex flex-wrap justify-between items-center mb-5 pb-4 border-b border-gray-100 dark:border-gray-700 gap-4">
+                <h2 className="text-2xl sm:text-3xl font-bold text-orange-600 dark:text-orange-400">{t.addDriverTitle}</h2>
+            </div>
 
             {formStatus && (
                 <FormStatus
@@ -159,6 +174,15 @@ const AddDriverForm: React.FC<AddDriverFormProps> = ({ lang, onAddDriver, vehicl
                             placeholder="1234567890"
                             required
                         />
+                        <Input
+                            label={lang === 'ar' ? 'رقم الهوية' : 'ID Number'}
+                            name="driverIdNumber"
+                            value={driver.driverIdNumber}
+                            onChange={handleInputChange}
+                            error={errors.driverIdNumber}
+                            placeholder={lang === 'ar' ? 'أدخل رقم الهوية' : 'Enter ID Number'}
+                            required
+                        />
                         <div>
                             <label className="block font-medium text-gray-700 dark:text-gray-300 mb-1" htmlFor="driverMobile">{t.driverMobile}</label>
                             <div className="flex items-center">
@@ -171,7 +195,7 @@ const AddDriverForm: React.FC<AddDriverFormProps> = ({ lang, onAddDriver, vehicl
                                     name="driverMobile"
                                     value={driver.driverMobile}
                                     onChange={handleMobileChange}
-                                    className={`block w-full h-11 px-4 border ${errors.driverMobile ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'} rounded-e-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 transition duration-150 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200`}
+                                    className={`block w-full h-11 px-4 border ${errors.driverMobile ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'} rounded-e-lg shadow-sm focus:ring-orange-500 focus:border-orange-500 transition duration-150 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200`}
                                     placeholder="5XXXXXXXX"
                                 />
                             </div>
@@ -196,12 +220,12 @@ const AddDriverForm: React.FC<AddDriverFormProps> = ({ lang, onAddDriver, vehicl
                     />
                 </FormSection>
 
-                <div className="flex justify-end gap-4 mt-8">
-                    <Button type="button" variant="secondary" onClick={() => window.history.back()}>
-                        <i className="fas fa-times me-2"></i> {t.cancel}
+                <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100 dark:border-gray-700">
+                    <Button type="button" variant="secondary" onClick={handleCancel}>
+                        <i className="fas fa-times me-1.5"></i> {t.cancel}
                     </Button>
                     <Button type="button" variant="success" onClick={handleSave} disabled={isSubmitting}>
-                        {isSubmitting ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-save me-2"></i> {t.saveDriver}</>}
+                        {isSubmitting ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-save me-1.5"></i> {t.saveDriver}</>}
                     </Button>
                 </div>
             </form>

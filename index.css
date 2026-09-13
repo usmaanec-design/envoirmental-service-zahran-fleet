@@ -1,0 +1,107 @@
+/* AG Grid CSS */
+@import 'ag-grid-community/styles/ag-grid.css';
+@import 'ag-grid-community/styles/ag-theme-alpine.css';
+
+/* Tailwind CSS */
+@import 'ag-grid-community/styles/ag-grid.css';
+@import 'ag-grid-community/styles/ag-theme-alpine.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background-color: #fdf8f0;
+}
+
+#root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* React Select Custom Styles */
+.react-select-container .react-select__control {
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.react-select-container .react-select__control:hover {
+  border-color: #ea580c;
+}
+
+.react-select-container .react-select__control--is-focused {
+  border-color: #ea580c;
+  box-shadow: 0 0 0 1px #ea580c;
+}
+
+.react-select-container .react-select__option--is-focused {
+  background-color: #fed7aa;
+}
+
+.react-select-container .react-select__option--is-selected {
+  background-color: #ea580c;
+}
+
+/* AG Grid Custom Theme Overrides */
+.ag-theme-alpine {
+  --ag-header-background-color: #ea580c;
+  --ag-header-foreground-color: white;
+  --ag-header-cell-hover-background-color: #dc2626;
+  --ag-row-hover-color: #fed7aa;
+  --ag-selected-row-background-color: #fef3c7;
+}
+
+.ag-theme-alpine .ag-header {
+  font-weight: 600;
+}
+
+.ag-theme-alpine .ag-row-even {
+  background-color: #fefefe;
+}
+
+.ag-theme-alpine .ag-row-odd {
+  background-color: #f9fafb;
+}
+
+/* Custom sleek hover-only scrollbar for Sidebar */
+.sidebar-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.3s ease;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 9999px;
+  transition: background-color 0.3s ease;
+}
+
+/* Show thin green scrollbar on hover over sidebar */
+.sidebar-container:hover .sidebar-scrollbar,
+.sidebar-scrollbar:hover {
+  scrollbar-color: #166534 transparent;
+}
+
+.sidebar-container:hover .sidebar-scrollbar::-webkit-scrollbar-thumb,
+.sidebar-scrollbar:hover::-webkit-scrollbar-thumb {
+  background-color: #166534;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #15803d;
+}

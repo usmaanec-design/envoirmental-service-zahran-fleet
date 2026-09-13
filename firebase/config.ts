@@ -1,36 +1,43 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
-import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth';
-import { getAnalytics } from 'firebase/analytics';
+import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
+import { getAuth, connectAuthEmulator } from 'firebase/auth';
 
-// Your web app's Firebase configuration
+// Your new Firebase project configuration - Envormental Service Zahran
 const firebaseConfig = {
-  apiKey: "AIzaSyAWamwH81PF-JqNYUqZeSijMX9wcAtGKXg",
-  authDomain: "zahran-projects-report.firebaseapp.com",
-  projectId: "zahran-projects-report",
-  storageBucket: "zahran-projects-report.firebasestorage.app",
-  messagingSenderId: "780922102185",
-  appId: "1:780922102185:web:a534d7dc6b3901671ca4b8",
-  measurementId: "G-6980JRBHSM"
+  apiKey: "AIzaSyCa_l7HdZpb77p-xDqtkyr-yLpP6fabnHE",
+  authDomain: "envormental-service-zahran.firebaseapp.com",
+  projectId: "envormental-service-zahran",
+  storageBucket: "envormental-service-zahran.firebasestorage.app",
+  messagingSenderId: "567527804007",
+  appId: "1:567527804007:web:31a2f11c62963e77a8d8c2",
+  measurementId: "G-43RJF355X7"
 };
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firebase services
+// Initialize Firestore
 export const db = getFirestore(app);
+
+// Initialize Auth
 export const auth = getAuth(app);
 
-// Set authentication persistence to LOCAL (survives browser refresh)
-setPersistence(auth, browserLocalPersistence).catch((error) => {
-  console.error('Error setting auth persistence:', error);
-});
+// Only connect to emulators in development mode - DISABLED for production
+// if (process.env.NODE_ENV === 'development') {
+//   try {
+//     // Check if emulators are already connected
+//     if (!(db as any)._delegate._databaseId.projectId.includes('demo-')) {
+//       connectFirestoreEmulator(db, 'localhost', 8080);
+//     }
+//     if (!(auth as any).config.emulator) {
+//       connectAuthEmulator(auth, 'http://localhost:9099');
+//     }
+//   } catch (error) {
+//     // Emulators already connected or not needed
+//     console.log('Firebase emulators connection skipped');
+//   }
+// }
 
-// Analytics (optional)
-let analytics;
-if (typeof window !== 'undefined') {
-  analytics = getAnalytics(app);
-}
+console.log('🔥 Firebase is ready');
 
-export { analytics };
 export default app;

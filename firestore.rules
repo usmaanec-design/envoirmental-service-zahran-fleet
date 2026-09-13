@@ -1,0 +1,25 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow authenticated users to access their own data
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Allow authenticated users to access projects collection
+    match /projects/{projectId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow access to admin notifications
+    match /adminNotifications/{notificationId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Temporary: Allow all access for testing (remove in production)
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

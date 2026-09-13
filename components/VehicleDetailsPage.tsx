@@ -113,9 +113,9 @@ const VehicleDetailsPage: React.FC<VehicleDetailsPageProps> = ({ lang, vehicles,
     }
 
     return (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 sm:p-8 md:p-10 max-w-4xl mx-auto">
-            <header className="border-b-2 border-blue-500 pb-6 mb-4">
-                <h2 className="text-3xl font-bold text-blue-600 dark:text-blue-400">{t.vehicleDetailsTitle}</h2>
+        <div className="w-full bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md border border-gray-100 dark:border-gray-700 p-4 sm:p-6 transition-all duration-200">
+            <div className="border-b border-gray-100 dark:border-gray-700 pb-4 mb-5">
+                <h2 className="text-2xl sm:text-3xl font-bold text-orange-600 dark:text-orange-400">{t.vehicleDetailsTitle}</h2>
                  <div className="mt-4 flex flex-col sm:flex-row gap-2">
                     <div className="flex-grow">
                         <Input
@@ -130,7 +130,7 @@ const VehicleDetailsPage: React.FC<VehicleDetailsPageProps> = ({ lang, vehicles,
                         <i className="fas fa-search me-2"></i> {t.search}
                     </Button>
                 </div>
-            </header>
+            </div>
             
             {renderContent()}
         </div>

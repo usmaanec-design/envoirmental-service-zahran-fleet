@@ -5,13 +5,12 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
-  preventAutoClose?: boolean;
 }
 
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, preventAutoClose = false }) => {
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
   useEffect(() => {
     const handleEsc = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !preventAutoClose) {
+      if (event.key === 'Escape') {
         onClose();
       }
     };
@@ -19,25 +18,19 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, prevent
     return () => {
       window.removeEventListener('keydown', handleEsc);
     };
-  }, [onClose, preventAutoClose]);
+  }, [onClose]);
 
   if (!isOpen) return null;
-
-  const handleBackdropClick = () => {
-    if (!preventAutoClose) {
-      onClose();
-    }
-  };
 
   return (
     <div 
       className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 z-50 flex justify-center items-center p-4"
-      onClick={handleBackdropClick}
+      onClick={onClose}
       aria-modal="true"
       role="dialog"
     >
       <div 
-        className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl transform transition-all"
+        className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg transform transition-all max-h-[90vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}
       >
         <header className="flex justify-between items-center p-5 border-b border-gray-200 dark:border-gray-700">

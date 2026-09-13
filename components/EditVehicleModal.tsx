@@ -3,7 +3,7 @@ import Modal from './ui/Modal';
 import Button from './ui/Button';
 import Input from './ui/Input';
 import type { Vehicle, Language } from '../types';
-import { TRANSLATIONS, SERVICE_TYPES } from '../constants';
+import { TRANSLATIONS, ARABIC_SERVICE_TYPES_FOR_EXPORT } from '../constants';
 import Select from './ui/Select';
 
 interface EditVehicleModalProps {
@@ -28,24 +28,21 @@ const EditVehicleModal: React.FC<EditVehicleModalProps> = ({ isOpen, onClose, on
     projectSite: '',
     status: 'Active',
   });
-  const [customServiceType, setCustomServiceType] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [originalFormData, setOriginalFormData] = useState<any>(null);
   const t = useMemo(() => TRANSLATIONS[lang], [lang]);
 
   const serviceTypeOptions = useMemo(() => {
-    return SERVICE_TYPES.en.map((enType, index) => ({
-        value: enType,
-        label: lang === 'ar' ? SERVICE_TYPES.ar[index] : enType,
+    return ARABIC_SERVICE_TYPES_FOR_EXPORT.map(type => ({
+        value: type,
+        label: type,
     }));
-  }, [lang]);
+  }, []);
 
   useEffect(() => {
-    if (vehicle && isOpen) {
-      const isPredefinedService = SERVICE_TYPES.en.includes(vehicle.serviceType);
+    if (vehicle) {
+      const serviceTypeInNewList = ARABIC_SERVICE_TYPES_FOR_EXPORT.includes(vehicle.serviceType);
 
       const newFormData = {
         doorNumber: vehicle.doorNumber,
@@ -56,57 +53,22 @@ const EditVehicleModal: React.FC<EditVehicleModalProps> = ({ isOpen, onClose, on
         year: vehicle.year,
         purchaseDate: vehicle.purchaseDate,
         tareWeight: vehicle.tareWeight,
-        serviceType: isPredefinedService ? vehicle.serviceType : 'Other',
+        serviceType: serviceTypeInNewList ? vehicle.serviceType : '',
         projectSite: vehicle.projectSite,
         status: vehicle.status,
       };
 
       setFormData(newFormData);
-      setOriginalFormData(newFormData);
-      setCustomServiceType(isPredefinedService ? '' : vehicle.serviceType);
       setError(null);
       setErrors({});
-      setHasUnsavedChanges(false);
     }
-  }, [vehicle, isOpen]);
+  }, [vehicle]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    if (name === 'serviceType' && value !== 'Other') {
-        setCustomServiceType('');
-    }
     setFormData(prev => ({ ...prev, [name]: value }));
-    setHasUnsavedChanges(true);
     if (errors[name]) {
         setErrors(prev => ({ ...prev, [name]: '' }));
-    }
-  };
-
-  const handleCustomServiceTypeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      setCustomServiceType(e.target.value);
-      setHasUnsavedChanges(true);
-      if (errors.customServiceType) {
-          setErrors(prev => ({ ...prev, customServiceType: '' }));
-      }
-  };
-
-  const handleClose = () => {
-    if (hasUnsavedChanges) {
-      const confirmClose = window.confirm(
-        lang === 'ar' 
-          ? 'لديك تغييرات غير محفوظة. هل تريد إغلاق النموذج بدون حفظ؟'
-          : 'You have unsaved changes. Do you want to close without saving?'
-      );
-      if (confirmClose) {
-        setHasUnsavedChanges(false);
-        setError(null);
-        setErrors({});
-        onClose();
-      }
-    } else {
-      setError(null);
-      setErrors({});
-      onClose();
     }
   };
 
@@ -114,12 +76,7 @@ const EditVehicleModal: React.FC<EditVehicleModalProps> = ({ isOpen, onClose, on
       const newErrors: Record<string, string> = {};
       if (!formData.doorNumber.trim()) newErrors.doorNumber = t.requiredField;
       if (!formData.chassisNumber.trim()) newErrors.chassisNumber = t.requiredField;
-      
-      if (formData.serviceType === 'Other' && !customServiceType.trim()) {
-          newErrors.customServiceType = t.requiredField;
-      } else if (!formData.serviceType) {
-          newErrors.serviceType = t.requiredField;
-      }
+      if (!formData.serviceType) newErrors.serviceType = t.requiredField;
       
       setErrors(newErrors);
       return Object.keys(newErrors).length === 0;
@@ -129,8 +86,6 @@ const EditVehicleModal: React.FC<EditVehicleModalProps> = ({ isOpen, onClose, on
     if (isSubmitting || !vehicle) return;
 
     setError(null);
-    
-    // Don't close modal if validation fails
     if (!validateForm()) {
         setError(t.saveError);
         return;
@@ -138,20 +93,11 @@ const EditVehicleModal: React.FC<EditVehicleModalProps> = ({ isOpen, onClose, on
 
     setIsSubmitting(true);
     try {
-      const finalServiceType = formData.serviceType === 'Other' ? customServiceType : formData.serviceType;
       const updatedVehicle: Vehicle = {
         ...vehicle,
         ...formData,
-        serviceType: finalServiceType,
       };
-      
       await onSave(updatedVehicle);
-      
-      // Only close modal after successful save
-      console.log('✅ Vehicle saved successfully');
-      setHasUnsavedChanges(false);
-      setError(null);
-      setErrors({});
       onClose();
     } catch (e) {
       let message = "Failed to save changes.";
@@ -165,7 +111,6 @@ const EditVehicleModal: React.FC<EditVehicleModalProps> = ({ isOpen, onClose, on
       }
       console.error("Failed to update vehicle:", e);
       setError(message);
-      // Don't close modal on error - let user see error and try again
     } finally {
       setIsSubmitting(false);
     }
@@ -174,16 +119,10 @@ const EditVehicleModal: React.FC<EditVehicleModalProps> = ({ isOpen, onClose, on
   if (!vehicle) return null;
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title={t.editVehicleTitle} preventAutoClose={hasUnsavedChanges}>
-      <div className="p-6 max-h-[60vh] overflow-y-auto scrollbar-thin scrollbar-thumb-blue-400 scrollbar-track-gray-200 dark:scrollbar-thumb-blue-600 dark:scrollbar-track-gray-700">
+    <Modal isOpen={isOpen} onClose={onClose} title={t.editVehicleTitle}>
+      <div className="p-6 max-h-[60vh] overflow-y-auto">
         {error && <p className="bg-red-100 text-red-700 p-3 rounded-md text-sm mb-4">{error}</p>}
-        {hasUnsavedChanges && (
-          <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 p-3 rounded-md text-sm mb-4">
-            <i className="fas fa-exclamation-triangle mr-2"></i>
-            {lang === 'ar' ? 'لديك تغييرات غير محفوظة' : 'You have unsaved changes'}
-          </div>
-        )}
-        <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); handleSave(); }}>
+        <form className="space-y-4">
           <Input label={t.doorNumber} name="doorNumber" value={formData.doorNumber} onChange={handleInputChange} error={errors.doorNumber} required />
           <Input label={t.plateNumber} name="plateNumber" value={formData.plateNumber} onChange={handleInputChange} />
           <Input label={t.manufacturer} name="manufacturer" value={formData.manufacturer} onChange={handleInputChange} />
@@ -198,47 +137,17 @@ const EditVehicleModal: React.FC<EditVehicleModalProps> = ({ isOpen, onClose, on
             onChange={handleInputChange}
             options={serviceTypeOptions}
             error={errors.serviceType}
+            placeholder={t.serviceType}
             required
           />
-          {formData.serviceType === 'Other' && (
-            <Input
-              label={t.otherServiceType}
-              name="customServiceType"
-              value={customServiceType}
-              onChange={handleCustomServiceTypeChange}
-              error={errors.customServiceType}
-              required
-            />
-          )}
           <Input label={t.projectSite} name="projectSite" value={formData.projectSite} onChange={handleInputChange} />
           <Input label={t.chassisNumber} name="chassisNumber" value={formData.chassisNumber} onChange={handleInputChange} error={errors.chassisNumber} required />
-          <Select
-            label="Vehicle Status"
-            name="status"
-            value={formData.status}
-            onChange={handleInputChange}
-            options={[
-              { value: 'Active', label: 'Active' },
-              { value: 'Accident', label: 'Accident' },
-              { value: 'Not Working', label: 'Not Working' }
-            ]}
-            error={errors.status}
-          />
         </form>
       </div>
       <footer className="bg-gray-50 px-6 py-4 flex justify-end gap-3 rounded-b-xl">
-        <Button variant="secondary" onClick={handleClose}>
-          {lang === 'ar' ? 'إلغاء' : 'Cancel'}
-        </Button>
+        <Button variant="secondary" onClick={onClose}>{t.cancel}</Button>
         <Button variant="success" onClick={handleSave} disabled={isSubmitting}>
-            {isSubmitting ? (
-              <>
-                <i className="fas fa-spinner fa-spin mr-2"></i>
-                {lang === 'ar' ? 'جاري الحفظ...' : 'Saving...'}
-              </>
-            ) : (
-              t.saveChanges
-            )}
+            {isSubmitting ? <i className="fas fa-spinner fa-spin"></i> : t.saveChanges}
         </Button>
       </footer>
     </Modal>

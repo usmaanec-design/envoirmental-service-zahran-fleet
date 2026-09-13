@@ -15,7 +15,7 @@ const Textarea: React.FC<TextareaProps> = ({ label, name, error, required, ...pr
             <textarea
                 id={name}
                 name={name}
-                className={`block w-full px-4 py-2 border ${error ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'} rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 transition duration-150 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200`}
+                className={`block w-full px-4 py-2 border ${error ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'} rounded-lg shadow-sm focus:ring-orange-500 focus:border-orange-500 transition duration-150 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200`}
                 required={required}
                 {...props}
             />
