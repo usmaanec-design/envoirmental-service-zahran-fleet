@@ -1,0 +1,17 @@
+# Robots.txt for Zahran Fleet Management & Environmental Services
+# Domain: https://envormental-service-zahran.web.app/
+
+User-agent: *
+Allow: /
+Allow: /images/
+Allow: /sitemap.xml
+Allow: /sitemap.txt
+Allow: /google7e1c40d5706cdbad.html
+
+# Disallow internal API endpoints or secret assets
+Disallow: /api/
+Disallow: /functions/
+
+# Sitemap locations
+Sitemap: https://envormental-service-zahran.web.app/sitemap.xml
+Sitemap: https://envormental-service-zahran.web.app/sitemap.txt

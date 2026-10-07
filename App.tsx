@@ -37,6 +37,7 @@ import type { Page, Language, Vehicle, Driver, Incident, User, ProjectData, Tran
 import * as fb from './firebase/service';
 import { TRANSLATIONS } from './constants';
 import { readExcelFile } from './utils/export';
+import { getInitialPageFromUrl, syncUrlWithPage } from './utils/routing';
 
 const initialProjectData: ProjectData = {
     vehicles: [],
@@ -55,11 +56,26 @@ type MenpowerEntryData = Omit<Supervisor, 'id'|'userId'|'foremen'> | Omit<Forema
 
 
 const App: React.FC = () => {
-  const [currentPage, setCurrentPage] = useState<Page>('dashboard');
+  const [currentPage, setCurrentPage] = useState<Page>(getInitialPageFromUrl);
   const [lang, setLang] = useState<Language>('en');
   const [theme, setTheme] = useState<Theme>('light');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Mobile only
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false); // Desktop only - start expanded
+
+  // Sync URL and document title when currentPage or lang changes
+  useEffect(() => {
+    syncUrlWithPage(currentPage, lang);
+  }, [currentPage, lang]);
+
+  // Handle browser back/forward buttons (popstate)
+  useEffect(() => {
+    const handlePopState = () => {
+      const pageFromUrl = getInitialPageFromUrl();
+      setCurrentPage(pageFromUrl);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
   
   // Handle window resize for sidebar responsiveness
   useEffect(() => {
@@ -258,8 +274,13 @@ const App: React.FC = () => {
 
   // --- Auth Handlers ---
   const handleSignUp = useCallback(async (newUser: User) => {
-    await fb.signUpUser(newUser);
-  }, []);
+    const user = await fb.signUpUser(newUser);
+    setCurrentUser(user);
+    if (user.email) {
+      await fetchDataForCurrentUser(user.email);
+    }
+    setShowWelcome(true);
+  }, [fetchDataForCurrentUser]);
 
   const handleLogin = useCallback(async (email: string, pass: string): Promise<void> => {
     console.log('🟡 handleLogin called with:', { email, pass });
@@ -675,6 +696,40 @@ const App: React.FC = () => {
     await fb.deleteMultipleLabourFromForemen(labourIds);
     await refreshActiveUserData();
   }, [refreshActiveUserData]);
+
+  const handleDeleteProject = useCallback(async (projectUser: User): Promise<boolean> => {
+    if (!currentUser?.isAdmin) {
+      alert(lang === 'ar' ? 'غير مصرح لك بحذف المشروع' : 'Unauthorized to delete project');
+      return false;
+    }
+    try {
+      console.log('🗑️ Deleting project:', projectUser.projectName, projectUser.email);
+      const res = await fb.deleteProject(projectUser);
+      if (res.success) {
+        // Update local state immediately
+        setAllUsers(prev => prev.filter(u => u.email !== projectUser.email && u.projectName !== projectUser.projectName));
+        setAllProjectData(prev => {
+          const next = { ...prev };
+          delete next[projectUser.email];
+          return next;
+        });
+        if (viewingProjectAsAdmin?.email === projectUser.email) {
+          setViewingProjectAsAdmin(null);
+          setCurrentPage('adminAllProjects');
+        }
+        // Force refresh all admin stats and datasets
+        await fetchDataForAdmin();
+        return true;
+      } else {
+        alert(res.error || (lang === 'ar' ? 'فشل حذف المشروع' : 'Failed to delete project'));
+        return false;
+      }
+    } catch (err: any) {
+      console.error('Error deleting project:', err);
+      alert(err.message || (lang === 'ar' ? 'حدث خطأ أثناء حذف المشروع' : 'Error deleting project'));
+      return false;
+    }
+  }, [currentUser, lang, viewingProjectAsAdmin, fetchDataForAdmin]);
 
   const handleDynamicStructureUpdate = useCallback(async (newStructure: any) => {
     setDynamicStructure(newStructure);
@@ -1473,6 +1528,7 @@ const App: React.FC = () => {
       return;
     }
     setCurrentPage(page);
+    syncUrlWithPage(page, lang);
 
     // Dynamically refresh live data when navigating to ensure statistics are 100% updated
     const activeId = getActiveUserId();
@@ -1576,12 +1632,12 @@ const App: React.FC = () => {
       case 'transferVehicle':
         return <TransferVehiclePage lang={lang} vehicles={activeProjectData.vehicles} allVehiclesForLookup={allVehiclesForLookup} transfers={activeProjectData.transfers} notifications={activeProjectData.notifications} allUsers={allUsers} currentUser={currentUser} onTransfer={handleTransferVehicle} onAddNotification={handleAddNotification} onDeleteTransfer={handleDeleteTransfer} onReturn={handleReturnVehicle} isReadOnly={isReadOnlyView} />;
       case 'settings':
-        return <SettingsPage lang={lang} onLanguageChange={handleLanguageChange} theme={theme} onThemeChange={handleThemeChange} currentUser={currentUser} />;
+        return <SettingsPage lang={lang} onLanguageChange={handleLanguageChange} theme={theme} onThemeChange={handleThemeChange} currentUser={currentUser} onDeleteProject={handleDeleteProject} />;
       case 'adminDashboard':
         return <AdminDashboard lang={lang} allUsers={allUsers} allProjectData={allProjectData} allAdminNotifications={allAdminNotifications} onDismissNotification={handleDismissNotification} onClearAllNotifications={handleClearAllNotifications} onNavigate={handleNavigate} />;
       case 'adminAllProjects':
         console.log('🏢 adminAllProjects case triggered with allUsers:', allUsers.length);
-        return <AdminAllProjectsPage lang={lang} allUsers={allUsers} onViewProjectDashboard={handleAdminViewProject} />;
+        return <AdminAllProjectsPage lang={lang} allUsers={allUsers} onViewProjectDashboard={handleAdminViewProject} onDeleteProject={handleDeleteProject} isAdmin={currentUser?.isAdmin ?? false} />;
       case 'adminAllVehicles':
           return <AdminAllVehiclesPage lang={lang} allUsers={allUsers} allProjectData={allProjectData} />;
       case 'adminAllIncidents':

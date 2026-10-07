@@ -3,11 +3,14 @@ import { TRANSLATIONS } from '../constants';
 import type { Language, User } from '../types';
 import Table, { type Column } from './ui/Table';
 import * as XLSX from 'xlsx';
+import DeleteProjectModal from './DeleteProjectModal';
 
 interface AdminAllProjectsPageProps {
     lang: Language;
     allUsers: User[];
     onViewProjectDashboard: (user: User) => void;
+    onDeleteProject?: (user: User) => Promise<boolean>;
+    isAdmin?: boolean;
 }
 
 type UserWithId = User & { id: string };
@@ -15,10 +18,13 @@ type UserWithId = User & { id: string };
 const AdminAllProjectsPage: React.FC<AdminAllProjectsPageProps> = ({ 
     lang, 
     allUsers, 
-    onViewProjectDashboard 
+    onViewProjectDashboard,
+    onDeleteProject,
+    isAdmin = true
 }) => {
     const t = useMemo(() => TRANSLATIONS[lang], [lang]);
     const [searchTerm, setSearchTerm] = useState('');
+    const [projectToDelete, setProjectToDelete] = useState<User | null>(null);
 
     const getTranslatedProjectName = (projectName: string): string => {
         if (lang !== 'ar' || !projectName) return projectName;
@@ -59,9 +65,24 @@ const AdminAllProjectsPage: React.FC<AdminAllProjectsPageProps> = ({
             sortable: true,
             allowWrap: true,
             render: (user) => (
-                <span className="font-semibold text-gray-900 dark:text-gray-100 text-xs">
-                    {getTranslatedProjectName(user.projectName)}
-                </span>
+                <div className="flex items-center gap-2 group">
+                    <span className="font-semibold text-gray-900 dark:text-gray-100 text-xs">
+                        {getTranslatedProjectName(user.projectName)}
+                    </span>
+                    {isAdmin && !user.isAdmin && onDeleteProject && (
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setProjectToDelete(user);
+                            }}
+                            className="w-5 h-5 rounded flex items-center justify-center text-gray-300 dark:text-gray-600 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-all opacity-0 group-hover:opacity-30 hover:!opacity-100 text-[10px] cursor-pointer"
+                            title={lang === 'ar' ? 'حذف المشروع' : 'Delete Project'}
+                        >
+                            <i className="fas fa-trash-alt"></i>
+                        </button>
+                    )}
+                </div>
             )
         },
         { 
@@ -101,17 +122,32 @@ const AdminAllProjectsPage: React.FC<AdminAllProjectsPageProps> = ({
             header: lang === 'ar' ? 'الإجراءات' : 'ACTIONS',
             sortable: false,
             render: (user: UserWithId) => (
-                <button 
-                    onClick={() => onViewProjectDashboard(user)} 
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-orange-500 hover:bg-orange-600 text-white flex items-center gap-1.5 shadow-sm hover:shadow transition-all cursor-pointer whitespace-nowrap"
-                    title={t.viewProjectDashboard}
-                >
-                    <i className="fas fa-eye text-xs"></i> 
-                    <span>{t.viewProjectDashboard || 'View Dashboard'}</span>
-                </button>
+                <div className="flex items-center gap-2">
+                    <button 
+                        onClick={() => onViewProjectDashboard(user)} 
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-orange-500 hover:bg-orange-600 text-white flex items-center gap-1.5 shadow-sm hover:shadow transition-all cursor-pointer whitespace-nowrap"
+                        title={t.viewProjectDashboard}
+                    >
+                        <i className="fas fa-eye text-xs"></i> 
+                        <span>{t.viewProjectDashboard || 'View Dashboard'}</span>
+                    </button>
+                    {isAdmin && !user.isAdmin && onDeleteProject && (
+                        <button 
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setProjectToDelete(user);
+                            }}
+                            className="w-7 h-7 rounded-md flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-all opacity-30 hover:opacity-100 cursor-pointer"
+                            title={lang === 'ar' ? 'حذف المشروع نهائياً' : 'Delete Project Permanently'}
+                        >
+                            <i className="fas fa-trash-alt text-[11px]"></i>
+                        </button>
+                    )}
+                </div>
             )
         }
-    ], [t, lang, getTranslatedProjectName, onViewProjectDashboard]);
+    ], [t, lang, getTranslatedProjectName, onViewProjectDashboard, isAdmin, onDeleteProject]);
 
     const handleExportExcel = () => {
         const isAr = lang === 'ar';
@@ -183,6 +219,18 @@ const AdminAllProjectsPage: React.FC<AdminAllProjectsPageProps> = ({
                     defaultPageSize={15}
                 />
             </div>
+
+            {/* Delete Project Confirmation Modal */}
+            <DeleteProjectModal
+                project={projectToDelete}
+                isOpen={!!projectToDelete}
+                onClose={() => setProjectToDelete(null)}
+                onConfirmDelete={async (proj) => {
+                    if (!onDeleteProject) return false;
+                    return await onDeleteProject(proj);
+                }}
+                lang={lang}
+            />
         </div>
     );
 };

@@ -3,6 +3,7 @@ import { TRANSLATIONS } from '../constants';
 import type { Language, Theme, User } from '../types';
 import FormSection from './ui/FormSection';
 import * as fb from '../firebase/service';
+import DeleteProjectModal from './DeleteProjectModal';
 
 interface SettingsPageProps {
     lang: Language;
@@ -10,12 +11,21 @@ interface SettingsPageProps {
     theme: Theme;
     onThemeChange: (theme: Theme) => void;
     currentUser?: User;
+    onDeleteProject?: (user: User) => Promise<boolean>;
 }
 
-const SettingsPage: React.FC<SettingsPageProps> = ({ lang, onLanguageChange, theme, onThemeChange, currentUser }) => {
+const SettingsPage: React.FC<SettingsPageProps> = ({ 
+    lang, 
+    onLanguageChange, 
+    theme, 
+    onThemeChange, 
+    currentUser,
+    onDeleteProject
+}) => {
     const t = useMemo(() => TRANSLATIONS[lang], [lang]);
     const [allUsers, setAllUsers] = useState<User[]>([]);
     const [loadingUsers, setLoadingUsers] = useState(false);
+    const [projectToDelete, setProjectToDelete] = useState<User | null>(null);
 
     // Load all users if current user is admin
     useEffect(() => {
@@ -166,10 +176,19 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ lang, onLanguageChange, the
                                                 <span className="text-sm font-medium text-orange-600 dark:text-orange-400">
                                                     Project #{index + 1}
                                                 </span>
-                                                {user.isAdmin && (
+                                                {user.isAdmin ? (
                                                     <span className="bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 px-2 py-1 rounded text-xs font-medium">
                                                         Admin
                                                     </span>
+                                                ) : onDeleteProject && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setProjectToDelete(user)}
+                                                        className="w-6 h-6 rounded flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-all opacity-30 hover:opacity-100 text-xs ml-auto cursor-pointer"
+                                                        title={lang === 'ar' ? 'حذف المشروع نهائياً' : 'Delete Project Permanently'}
+                                                    >
+                                                        <i className="fas fa-trash-alt text-[11px]"></i>
+                                                    </button>
                                                 )}
                                             </div>
                                             <h4 className="font-semibold text-gray-900 dark:text-white mb-1">
@@ -237,6 +256,22 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ lang, onLanguageChange, the
                     )}
                 </FormSection>
             )}
+
+            {/* Delete Project Modal */}
+            <DeleteProjectModal
+                project={projectToDelete}
+                isOpen={!!projectToDelete}
+                onClose={() => setProjectToDelete(null)}
+                onConfirmDelete={async (proj) => {
+                    if (!onDeleteProject) return false;
+                    const success = await onDeleteProject(proj);
+                    if (success) {
+                        setAllUsers(prev => prev.filter(u => u.email !== proj.email));
+                    }
+                    return success;
+                }}
+                lang={lang}
+            />
         </div>
     );
 };

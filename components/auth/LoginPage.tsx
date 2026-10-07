@@ -4,6 +4,8 @@ interface LoginPageProps {
   onLogin: (email: string, password: string) => Promise<void>;
   onSwitchToSignUp: () => void;
   onSwitchToForgotPassword: () => void;
+  initialLang?: 'en' | 'ar';
+  onLanguageChange?: (lang: 'en' | 'ar') => void;
 }
 
 interface Status {
@@ -11,13 +13,24 @@ interface Status {
   message: string;
 }
 
-const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToSignUp, onSwitchToForgotPassword }) => {
+const LoginPage: React.FC<LoginPageProps> = ({ 
+  onLogin, 
+  onSwitchToSignUp, 
+  onSwitchToForgotPassword,
+  initialLang = 'en',
+  onLanguageChange
+}) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [lang, setLang] = useState<'en' | 'ar'>('en');
+  const [lang, setLang] = useState<'en' | 'ar'>(initialLang);
   const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState<Status | null>(null);
   const [adminHint, setAdminHint] = useState<string>('');
+
+  const handleLangToggle = (newLang: 'en' | 'ar') => {
+    setLang(newLang);
+    onLanguageChange?.(newLang);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,7 +68,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToSignUp, onSwit
       <div className="fixed top-4 right-4 z-10">
         <div className="flex items-center bg-white rounded-full px-3 py-2 border">
           <button
-            onClick={() => setLang('en')}
+            onClick={() => handleLangToggle('en')}
             className={`px-3 py-1 text-xs font-medium rounded-full transition-all ${
               lang === 'en' ? 'bg-orange-500 text-white' : 'text-gray-600 hover:text-orange-500'
             }`}
@@ -64,7 +77,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToSignUp, onSwit
           </button>
           <div className="w-px h-4 bg-gray-300 mx-1" />
           <button
-            onClick={() => setLang('ar')}
+            onClick={() => handleLangToggle('ar')}
             className={`px-3 py-1 text-xs font-medium rounded-full transition-all ${
               lang === 'ar' ? 'bg-orange-500 text-white' : 'text-gray-600 hover:text-orange-500'
             }`}
@@ -168,19 +181,40 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToSignUp, onSwit
             <button
               type="submit"
               disabled={status?.type === 'loading'}
-              className="w-full bg-orange-500 text-white py-2 px-3 rounded text-sm font-medium hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-orange-500 text-white py-2.5 px-3 rounded text-sm font-semibold hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm flex items-center justify-center gap-2"
             >
-              {status?.type === 'loading' ? 
-                (lang === 'ar' ? 'جاري تسجيل الدخول...' : 'Signing in...') : 
-                (lang === 'ar' ? 'تسجيل الدخول' : 'Sign In')
-              }
+              {status?.type === 'loading' ? (
+                <>
+                  <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span>{lang === 'ar' ? 'جاري تسجيل الدخول...' : 'Signing in...'}</span>
+                </>
+              ) : (
+                <span>{lang === 'ar' ? 'تسجيل الدخول' : 'Sign In'}</span>
+              )}
             </button>
+
+            {/* Create Account Link */}
+            <div className="pt-2 border-t border-gray-200 text-center">
+              <span className="text-xs text-gray-500">
+                {lang === 'ar' ? 'ليس لديك حساب؟ ' : "Don't have an account? "}
+              </span>
+              <button
+                type="button"
+                onClick={onSwitchToSignUp}
+                className="text-xs font-semibold text-orange-600 hover:text-orange-700 hover:underline cursor-pointer"
+              >
+                {lang === 'ar' ? 'إنشاء حساب جديد' : 'Create Account'}
+              </button>
+            </div>
 
             {/* Admin Login Helper */}
             <button
               type="button"
               onClick={handleAdminLoginClick}
-              className="w-full text-center text-xs text-gray-500 hover:text-orange-600 py-1"
+              className="w-full text-center text-xs text-gray-400 hover:text-orange-600 py-1 transition-colors"
             >
               {lang === 'ar' ? 'تحتاج وصول إداري؟ اضغط هنا' : 'Need admin access? Click here'}
             </button>

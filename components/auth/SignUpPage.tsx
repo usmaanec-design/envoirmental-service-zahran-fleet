@@ -1,13 +1,16 @@
 import React, { useState, useMemo } from 'react';
 import { TRANSLATIONS } from '../../constants';
 import type { Language, User } from '../../types';
-import Input from '../ui/Input';
-import Button from '../ui/Button';
 
 interface SignUpPageProps {
   onSignUp: (user: User) => Promise<void>;
   onSwitchToLogin: () => void;
   lang: Language;
+}
+
+interface Status {
+  type: 'error' | 'success' | 'loading';
+  message: string;
 }
 
 const initialState: Omit<User, 'isAdmin'> = {
@@ -17,294 +20,317 @@ const initialState: Omit<User, 'isAdmin'> = {
   operatorName: '',
   email: '',
   password: '',
-  securityAnswer: '',
+  securityAnswer: 'zahran',
 };
 
-const SignUpPage: React.FC<SignUpPageProps> = ({ onSignUp, onSwitchToLogin, lang }) => {
+const SignUpPage: React.FC<SignUpPageProps> = ({ onSignUp, onSwitchToLogin, lang: propLang }) => {
   const [formData, setFormData] = useState<Omit<User, 'isAdmin'>>(initialState);
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [errors, setErrors] = useState<Partial<Record<keyof User | 'confirmPassword' | 'api', string>>>({});
-  const [isSuccess, setIsSuccess] = useState(false);
+  const [lang, setLang] = useState<Language>(propLang || 'en');
+  const [showPassword, setShowPassword] = useState(false);
+  const [status, setStatus] = useState<Status | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const t = useMemo(() => TRANSLATIONS[lang], [lang]);
+
+  const t = useMemo(() => TRANSLATIONS[lang] || TRANSLATIONS['en'], [lang]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    if (errors[name as keyof typeof errors] || errors.api) {
-      setErrors(prev => ({ ...prev, [name]: undefined, api: undefined }));
+    if (status?.type === 'error') {
+      setStatus(null);
     }
   };
 
-  const handleConfirmPasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setConfirmPassword(e.target.value);
-    if (errors.confirmPassword || errors.api) {
-      setErrors(prev => ({ ...prev, confirmPassword: undefined, api: undefined }));
+  const validate = (): string | null => {
+    if (!formData.projectName.trim()) return lang === 'ar' ? 'يرجى إدخال اسم المشروع' : 'Project name is required';
+    if (!formData.projectManagerName.trim()) return lang === 'ar' ? 'يرجى إدخال اسم مدير المشروع' : 'Project manager name is required';
+    if (!formData.email.trim()) return lang === 'ar' ? 'يرجى إدخال البريد الإلكتروني' : 'Email address is required';
+    
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email.trim())) {
+      return lang === 'ar' ? 'صيغة البريد الإلكتروني غير صحيحة' : 'Please enter a valid email address';
     }
+
+    if (!formData.password || formData.password.length < 6) {
+      return lang === 'ar' ? 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' : 'Password must be at least 6 characters';
+    }
+
+    if (formData.password !== confirmPassword) {
+      return lang === 'ar' ? 'كلمتا المرور غير متطابقتين' : 'Passwords do not match';
+    }
+
+    return null;
   };
 
-  const validate = (): boolean => {
-    const newErrors: Partial<Record<keyof User | 'confirmPassword', string>> = {};
-    let isValid = true;
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const errorMsg = validate();
+    if (errorMsg) {
+      setStatus({ type: 'error', message: errorMsg });
+      return;
+    }
 
-    // Check required string fields explicitly
-    const requiredFields: (keyof typeof formData)[] = ['projectName', 'projectManagerName', 'projectId', 'operatorName', 'email', 'password', 'securityAnswer'];
-    requiredFields.forEach(key => {
-        if (!formData[key] || formData[key].trim() === '') {
-            newErrors[key] = t.requiredField;
-            isValid = false;
-        }
+    setIsSubmitting(true);
+    setStatus({
+      type: 'loading',
+      message: lang === 'ar' ? 'جاري إنشاء الحساب...' : 'Creating your account...'
     });
 
-    // Email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (formData.email && !emailRegex.test(formData.email)) {
-      newErrors.email = t.emailInvalid;
-      isValid = false;
-    }
-
-    // Password strength
-    if (formData.password && formData.password.length < 8) {
-      newErrors.password = t.passwordInvalid;
-      isValid = false;
-    }
-    
-    // Confirm password
-    if (!confirmPassword) {
-        newErrors.confirmPassword = t.requiredField;
-        isValid = false;
-    } else if (formData.password && formData.password !== confirmPassword) {
-      newErrors.confirmPassword = t.passwordsDoNotMatch;
-      isValid = false;
-    }
-
-    setErrors(newErrors);
-    return isValid;
-  };
-
-  const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isSubmitting || !validate()) return;
-    
-    setIsSubmitting(true);
-    setErrors({});
     try {
-      await onSignUp({ ...formData, isAdmin: false });
-      setIsSuccess(true);
-      setTimeout(() => {
-        onSwitchToLogin();
-      }, 3000);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "An unknown error occurred.";
-      setErrors(prev => ({ ...prev, api: message }));
+      const preparedData: User = {
+        ...formData,
+        email: formData.email.trim().toLowerCase(),
+        projectId: formData.projectId.trim() || `PRJ-${Date.now().toString().slice(-4)}`,
+        operatorName: formData.operatorName.trim() || formData.projectManagerName.trim(),
+        securityAnswer: formData.securityAnswer?.trim() || 'zahran',
+        isAdmin: false
+      };
+
+      await onSignUp(preparedData);
+      setStatus({
+        type: 'success',
+        message: lang === 'ar' ? 'تم إنشاء الحساب بنجاح! جاري الدخول...' : 'Account created successfully! Logging in...'
+      });
+    } catch (error: any) {
+      console.error('Sign up error:', error);
+      let message = lang === 'ar' ? 'حدث خطأ أثناء إنشاء الحساب' : 'Failed to create account';
+      if (error?.code === 'auth/email-already-in-use') {
+        message = lang === 'ar' ? 'هذا البريد الإلكتروني مسجل بالفعل' : 'This email is already registered. Please sign in.';
+      } else if (error?.code === 'auth/invalid-email') {
+        message = lang === 'ar' ? 'صيغة البريد الإلكتروني غير صحيحة' : 'Invalid email format';
+      } else if (error?.code === 'auth/weak-password') {
+        message = lang === 'ar' ? 'كلمة المرور ضعيفة جداً' : 'Password is too weak';
+      } else if (error?.message) {
+        message = error.message;
+      }
+      setStatus({ type: 'error', message });
     } finally {
       setIsSubmitting(false);
     }
   };
-  
-  if (isSuccess) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-400 via-orange-500 to-green-500 relative overflow-hidden">
-        {/* Animated background elements */}
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -top-40 -left-40 w-80 h-80 bg-white/10 rounded-full backdrop-blur-3xl animate-pulse"></div>
-          <div className="absolute top-1/2 -right-32 w-64 h-64 bg-orange-300/20 rounded-full backdrop-blur-3xl animate-pulse delay-1000"></div>
-          <div className="absolute -bottom-32 left-1/3 w-72 h-72 bg-green-300/20 rounded-full backdrop-blur-3xl animate-pulse delay-2000"></div>
-        </div>
-        
-        <div className="relative z-10 flex items-center justify-center min-h-screen px-4 py-8">
-          <div className="w-full max-w-md">
-            <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl shadow-2xl p-8 text-center animate-fade-in-down">
-              <div className="flex justify-center items-center mx-auto w-20 h-20 bg-gradient-to-br from-green-400/30 to-green-500/20 backdrop-blur-sm border border-green-400/30 rounded-full mb-6">
-                  <i className="fas fa-check text-4xl text-green-300 drop-shadow-lg"></i>
-              </div>
-              <h2 className="text-3xl font-bold text-white drop-shadow-2xl mb-3">{t.signUpTitle}</h2>
-              <p className="text-white/90 text-lg drop-shadow-lg">{t.accountCreatedSuccess}</p>
-              <div className="mt-6 animate-pulse">
-                <p className="text-white/80 text-sm">Redirecting to login...</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-400 via-orange-500 to-green-500 relative overflow-hidden">
-      {/* Animated background elements */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -left-40 w-80 h-80 bg-white/10 rounded-full backdrop-blur-3xl animate-pulse"></div>
-        <div className="absolute top-1/2 -right-32 w-64 h-64 bg-orange-300/20 rounded-full backdrop-blur-3xl animate-pulse delay-1000"></div>
-        <div className="absolute -bottom-32 left-1/3 w-72 h-72 bg-green-300/20 rounded-full backdrop-blur-3xl animate-pulse delay-2000"></div>
+    <div className="min-h-screen flex items-center justify-center bg-orange-500 py-6 px-4">
+      {/* Language Toggle - Top Right */}
+      <div className="fixed top-4 right-4 z-10">
+        <div className="flex items-center bg-white rounded-full px-3 py-2 border shadow-sm">
+          <button
+            type="button"
+            onClick={() => setLang('en')}
+            className={`px-3 py-1 text-xs font-medium rounded-full transition-all ${
+              lang === 'en' ? 'bg-orange-500 text-white' : 'text-gray-600 hover:text-orange-500'
+            }`}
+          >
+            EN
+          </button>
+          <div className="w-px h-4 bg-gray-300 mx-1" />
+          <button
+            type="button"
+            onClick={() => setLang('ar')}
+            className={`px-3 py-1 text-xs font-medium rounded-full transition-all ${
+              lang === 'ar' ? 'bg-orange-500 text-white' : 'text-gray-600 hover:text-orange-500'
+            }`}
+          >
+            عربي
+          </button>
+        </div>
       </div>
-      
-      <div className="relative z-10 flex items-center justify-center min-h-screen px-4 py-8">
-        <div className="w-full max-w-2xl">
-          {/* Header with Zahran logo */}
-          <div className="text-center mb-6">
-            <div className="flex-shrink-0 w-20 h-20 mx-auto rounded-full flex items-center justify-center bg-white/20 backdrop-blur-sm border border-white/30 mb-4 shadow-xl shadow-orange-500/30 transform transition-transform duration-300 hover:scale-110">
+
+      {/* Main Sign Up Card */}
+      <div className="w-full max-w-md mx-auto">
+        <div className="bg-white rounded shadow-md p-5 space-y-3">
+          
+          {/* Header with Logo */}
+          <div className="text-center">
+            <div className="mx-auto w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center mb-2 shadow-sm">
               <img 
                 src="/images/company-logo.jpeg" 
                 alt="Zahran Fleet" 
-                className="w-14 h-14 object-contain rounded-full shadow-sm"
-                style={{ filter: 'brightness(1.2) contrast(1.1)' }}
+                className="w-9 h-9 object-contain rounded-full"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M12 2L3 7l9 5 9-5-9-5zM3 17l9 5 9-5M3 12l9 5 9-5'/%3E%3C/svg%3E";
+                }}
               />
             </div>
-            <h1 className="text-3xl font-bold text-white drop-shadow-2xl mb-2">{t.createAccount}</h1>
-            <p className="text-white/90 text-lg drop-shadow-lg">Environmental Services Zahran Fleet</p>
-            <p className="text-white/80 text-sm drop-shadow-lg mt-1">{t.createAccountSubtitle}</p>
+            <h1 className="text-lg font-bold text-gray-800">
+              {lang === 'ar' ? 'إنشاء حساب جديد' : 'Create New Account'}
+            </h1>
+            <p className="text-gray-600 text-xs">
+              {lang === 'ar' ? 'خدمات بيئية زهران فليت' : 'Environmental Services Zahran Fleet'}
+            </p>
           </div>
-          
-          <div className="bg-white/15 backdrop-blur-xl border border-white/30 rounded-3xl shadow-2xl p-8 space-y-6 animate-fade-in-down transform transition-all duration-500 hover:shadow-orange-500/20 hover:shadow-3xl">
-            <form onSubmit={handleSignUp} className="space-y-4" noValidate>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-white/90 mb-2 drop-shadow">{t.projectName} *</label>
-                  <input
-                    name="projectName"
-                    value={formData.projectName}
-                    onChange={handleChange}
-                    className="block w-full px-4 py-3 border border-orange-300/50 rounded-xl shadow-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition duration-150 bg-white/90 backdrop-blur-sm text-gray-900 placeholder:text-gray-500"
-                    placeholder="Enter project name"
-                    required
-                  />
-                  {errors.projectName && <p className="text-red-200 text-sm mt-1 drop-shadow">{errors.projectName}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-white/90 mb-2 drop-shadow">{t.projectManagerName} *</label>
-                  <input
-                    name="projectManagerName"
-                    value={formData.projectManagerName}
-                    onChange={handleChange}
-                    className="block w-full px-4 py-3 border border-orange-300/50 rounded-xl shadow-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition duration-150 bg-white/90 backdrop-blur-sm text-gray-900 placeholder:text-gray-500"
-                    placeholder="Enter manager name"
-                    required
-                  />
-                  {errors.projectManagerName && <p className="text-red-200 text-sm mt-1 drop-shadow">{errors.projectManagerName}</p>}
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-white/90 mb-2 drop-shadow">{t.projectId} *</label>
-                  <input
-                    name="projectId"
-                    value={formData.projectId}
-                    onChange={handleChange}
-                    className="block w-full px-4 py-3 border border-orange-300/50 rounded-xl shadow-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition duration-150 bg-white/90 backdrop-blur-sm text-gray-900 placeholder:text-gray-500"
-                    placeholder="Enter project ID"
-                    required
-                  />
-                  {errors.projectId && <p className="text-red-200 text-sm mt-1 drop-shadow">{errors.projectId}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-white/90 mb-2 drop-shadow">{t.operatorName} *</label>
-                  <input
-                    name="operatorName"
-                    value={formData.operatorName}
-                    onChange={handleChange}
-                    className="block w-full px-4 py-3 border border-orange-300/50 rounded-xl shadow-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition duration-150 bg-white/90 backdrop-blur-sm text-gray-900 placeholder:text-gray-500"
-                    placeholder="Enter operator name"
-                    required
-                  />
-                  {errors.operatorName && <p className="text-red-200 text-sm mt-1 drop-shadow">{errors.operatorName}</p>}
-                </div>
-              </div>
-              
+
+          {/* Form Status Messages */}
+          {status && (
+            <div className={`p-3 rounded text-xs ${
+              status.type === 'error' ? 'bg-red-50 text-red-600 border border-red-200' :
+              status.type === 'loading' ? 'bg-blue-50 text-blue-600 border border-blue-200' :
+              'bg-green-50 text-green-600 border border-green-200'
+            }`}>
+              <p className="font-medium">{status.message}</p>
+            </div>
+          )}
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Project Name */}
               <div>
-                <label className="block text-sm font-medium text-white/90 mb-2 drop-shadow">{t.email} *</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  {lang === 'ar' ? 'اسم المشروع' : 'Project Name'} <span className="text-red-500">*</span>
+                </label>
                 <input
-                  name="email"
-                  type="email"
-                  value={formData.email}
+                  type="text"
+                  name="projectName"
+                  value={formData.projectName}
                   onChange={handleChange}
-                  className="block w-full px-4 py-3 border border-orange-300/50 rounded-xl shadow-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition duration-150 bg-white/90 backdrop-blur-sm text-gray-900 placeholder:text-gray-500"
-                  placeholder="Enter your email"
+                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-orange-500 focus:border-orange-500 text-gray-800 placeholder-gray-400"
+                  placeholder={lang === 'ar' ? 'مثال: مشروع الشرق' : 'e.g. Sharq Project'}
                   required
                 />
-                {errors.email && <p className="text-red-200 text-sm mt-1 drop-shadow">{errors.email}</p>}
               </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-white/90 mb-2 drop-shadow">{t.password} *</label>
+
+              {/* Project ID */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  {lang === 'ar' ? 'معرف المشروع' : 'Project ID'}
+                </label>
+                <input
+                  type="text"
+                  name="projectId"
+                  value={formData.projectId}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-orange-500 focus:border-orange-500 text-gray-800 placeholder-gray-400"
+                  placeholder={lang === 'ar' ? 'مثال: 5537' : 'e.g. 5537'}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Project Manager Name */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  {lang === 'ar' ? 'اسم مدير المشروع' : 'Project Manager Name'} <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="projectManagerName"
+                  value={formData.projectManagerName}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-orange-500 focus:border-orange-500 text-gray-800 placeholder-gray-400"
+                  placeholder={lang === 'ar' ? 'اسم المدير' : 'Manager Name'}
+                  required
+                />
+              </div>
+
+              {/* Data Entry Operator Name */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  {lang === 'ar' ? 'اسم مدخل البيانات' : 'Operator Name'}
+                </label>
+                <input
+                  type="text"
+                  name="operatorName"
+                  value={formData.operatorName}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-orange-500 focus:border-orange-500 text-gray-800 placeholder-gray-400"
+                  placeholder={lang === 'ar' ? 'اسم المشغل' : 'Operator Name'}
+                />
+              </div>
+            </div>
+
+            {/* Email Address */}
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                {lang === 'ar' ? 'البريد الإلكتروني' : 'Email Address'} <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-orange-500 focus:border-orange-500 text-gray-800 placeholder-gray-400"
+                placeholder={lang === 'ar' ? 'name@zahran.com' : 'name@zahran.com'}
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Password */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  {lang === 'ar' ? 'كلمة المرور' : 'Password'} <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
                   <input
+                    type={showPassword ? "text" : "password"}
                     name="password"
-                    type="password"
                     value={formData.password}
                     onChange={handleChange}
-                    className="block w-full px-4 py-3 border border-orange-300/50 rounded-xl shadow-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition duration-150 bg-white/90 backdrop-blur-sm text-gray-900 placeholder:text-gray-500"
-                    placeholder="Enter password"
+                    className="w-full px-3 py-2 pr-8 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-orange-500 focus:border-orange-500 text-gray-800 placeholder-gray-400"
+                    placeholder="••••••••"
                     required
+                    minLength={6}
                   />
-                  {errors.password && <p className="text-red-200 text-sm mt-1 drop-shadow">{errors.password}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-white/90 mb-2 drop-shadow">{t.confirmPassword} *</label>
-                  <input
-                    name="confirmPassword"
-                    type="password"
-                    value={confirmPassword}
-                    onChange={handleConfirmPasswordChange}
-                    className="block w-full px-4 py-3 border border-orange-300/50 rounded-xl shadow-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition duration-150 bg-white/90 backdrop-blur-sm text-gray-900 placeholder:text-gray-500"
-                    placeholder="Confirm password"
-                    required
-                  />
-                  {errors.confirmPassword && <p className="text-red-200 text-sm mt-1 drop-shadow">{errors.confirmPassword}</p>}
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showPassword ? '🙈' : '👁️'}
+                  </button>
                 </div>
               </div>
-              
-              {/* Security Question Section */}
-              <div className="border-t border-white/20 pt-6">
-                <div className="p-4 bg-gradient-to-r from-orange-600/30 to-orange-500/20 backdrop-blur-sm rounded-xl mb-4 border border-orange-400/30">
-                  <p className="text-sm font-semibold text-white drop-shadow-lg">
-                    {t.companyNameQuestion}
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-white/90 mb-2 drop-shadow">{t.securityAnswer} *</label>
-                  <input 
-                    name="securityAnswer" 
-                    value={formData.securityAnswer || ''} 
-                    onChange={handleChange} 
-                    placeholder="zahran"
-                    className="block w-full px-4 py-3 border border-orange-300/50 rounded-xl shadow-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition duration-150 bg-white/90 backdrop-blur-sm text-gray-900 placeholder:text-gray-500"
-                    required
-                  />
-                  {errors.securityAnswer && <p className="text-red-200 text-sm mt-1 drop-shadow">{errors.securityAnswer}</p>}
-                </div>
+
+              {/* Confirm Password */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  {lang === 'ar' ? 'تأكيد كلمة المرور' : 'Confirm Password'} <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-orange-500 focus:border-orange-500 text-gray-800 placeholder-gray-400"
+                  placeholder="••••••••"
+                  required
+                  minLength={6}
+                />
               </div>
-              
-              {errors.api && <p className="text-red-200 text-center text-sm drop-shadow">{errors.api}</p>}
-              
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full py-4 px-6 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition duration-300 transform hover:scale-105 disabled:transform-none disabled:opacity-50 backdrop-blur-sm border border-orange-400/30"
-              >
-                {isSubmitting ? (
-                  <div className="flex items-center justify-center">
-                    <i className="fas fa-spinner fa-spin mr-2"></i>
-                    Creating Account...
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center">
-                    <i className="fas fa-user-plus mr-2"></i>
-                    {t.createAccount}
-                  </div>
-                )}
-              </button>
-            </form>
-            
-            <div className="text-center pt-4 border-t border-white/20">
-              <p className="text-white/80 text-sm drop-shadow">
-                {t.alreadyHaveAccount}{' '}
-                <button onClick={onSwitchToLogin} className="font-semibold text-orange-200 hover:text-white hover:underline drop-shadow transition duration-200 transform hover:scale-105">
-                  {t.signInHere}
-                </button>
-              </p>
             </div>
+
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full bg-orange-500 text-white py-2 px-3 rounded text-sm font-medium hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm flex items-center justify-center gap-2 cursor-pointer mt-2"
+            >
+              {isSubmitting ? (
+                <>
+                  <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span>{lang === 'ar' ? 'جاري إنشاء الحساب...' : 'Creating Account...'}</span>
+                </>
+              ) : (
+                <span>{lang === 'ar' ? 'إنشاء الحساب' : 'Create Account'}</span>
+              )}
+            </button>
+          </form>
+
+          {/* Footer - Switch to Login */}
+          <div className="text-center pt-2 border-t border-gray-200">
+            <span className="text-xs text-gray-600">
+              {lang === 'ar' ? 'لديك حساب بالفعل؟ ' : 'Already have an account? '}
+            </span>
+            <button
+              type="button"
+              onClick={onSwitchToLogin}
+              className="text-xs font-semibold text-orange-600 hover:text-orange-700 hover:underline cursor-pointer"
+            >
+              {lang === 'ar' ? 'تسجيل الدخول' : 'Sign In'}
+            </button>
           </div>
         </div>
       </div>

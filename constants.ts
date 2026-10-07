@@ -213,6 +213,9 @@ export const TRANSLATIONS = {
         adminLogin: "Admin Login",
         adminLoginHint: "Please enter the admin email and password.",
         tooManyRequests: "Access to this account has been temporarily disabled due to many failed login attempts. You can immediately restore it by resetting your password or you can try again later.",
+        createAccountSubtitle: "Sign up as a new project or fleet manager",
+        companyNameQuestion: "Security Question: What is your company name? (Answer: zahran)",
+        securityAnswer: "Security Answer",
         genericAuthError: "An unexpected error occurred. Please try again.",
         
         // App
@@ -687,6 +690,9 @@ export const TRANSLATIONS = {
         adminLogin: "دخول المسؤول",
         adminLoginHint: "الرجاء إدخال البريد الإلكتروني وكلمة المرور الخاصة بالمسؤول.",
         tooManyRequests: "تم تعطيل الوصول إلى هذا الحساب مؤقتًا بسبب العديد من محاولات تسجيل الدخول الفاشلة. يمكنك استعادته فورًا عن طريق إعادة تعيين كلمة المرور أو يمكنك المحاولة مرة أخرى لاحقًا.",
+        createAccountSubtitle: "سجل كمدير مشروع أو أسطول جديد",
+        companyNameQuestion: "سؤال الأمان: ما هو اسم شركتك؟ (الإجابة: zahran)",
+        securityAnswer: "إجابة سؤال الأمان",
         genericAuthError: "حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.",
 
         // App

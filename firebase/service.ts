@@ -521,16 +521,16 @@ export const checkUserExists = async (email: string) => {
   };
 };
 // Other required functions
-export const signUpUser = async (user: Omit<User, 'isAdmin'>): Promise<void> => {
-  // Allow any email domain for signup - no restrictions
-  console.log('?? Creating account for:', user.email);
+export const signUpUser = async (user: Omit<User, 'isAdmin'>): Promise<User> => {
+  console.log('📝 Creating account for:', user.email);
   
   const userCredential = await createUserWithEmailAndPassword(auth, user.email, user.password);
   
   const userData: User = {
     ...user,
     isAdmin: false,
-    uid: userCredential.user.uid
+    uid: userCredential.user.uid,
+    securityAnswer: user.securityAnswer || 'zahran'
   };
   
   const userDocRef = doc(db, COLLECTIONS.USERS, user.email);
@@ -551,6 +551,10 @@ export const signUpUser = async (user: Omit<User, 'isAdmin'>): Promise<void> => 
   };
   
   await setDoc(projectDocRef, initialProjectData);
+  localStorage.setItem('zahran_current_user', JSON.stringify(userData));
+  console.log('✅ Account created and persisted:', userData.email);
+
+  return userData;
 };
 export const saveProjectData = async (email: string, data: ProjectData): Promise<void> => {
   const projectDocRef = doc(db, COLLECTIONS.PROJECTS, email);
@@ -1085,8 +1089,25 @@ export const onAppAuthStateChanged = (callback: (user: User | null) => void) => 
         }
         if (firebaseUser.email) {
           const userDocRef = doc(db, COLLECTIONS.USERS, firebaseUser.email);
-          const userDoc = await getDoc(userDocRef);
+          let userDoc = await getDoc(userDocRef);
           
+          if (!userDoc.exists()) {
+            // Check if user was just created in localStorage
+            const localData = localStorage.getItem('zahran_current_user');
+            if (localData) {
+              try {
+                const parsed = JSON.parse(localData) as User;
+                if (parsed.email === firebaseUser.email) {
+                  callback(parsed);
+                  return;
+                }
+              } catch (_) {}
+            }
+            // Wait briefly for Firestore setDoc to complete and retry once
+            await new Promise(res => setTimeout(res, 800));
+            userDoc = await getDoc(userDocRef);
+          }
+
           if (userDoc.exists()) {
             const userData = userDoc.data() as User;
             userData.uid = firebaseUser.uid;
@@ -3688,3 +3709,154 @@ export const commitManpowerAssignments = async (assignments: {
     throw error;
   }
 };
+
+// Complete Project Deletion from Firebase (Admin only)
+export const deleteProject = async (userToDelete: User): Promise<{ success: boolean; error?: string }> => {
+  try {
+    console.log('🗑️ Starting complete deletion for project:', userToDelete.projectName, userToDelete.email);
+    
+    // Safety check: Never delete admin accounts
+    const adminEmails = [
+      'zahran@projects.reports',
+      'admin@zahran.fleet',
+      'super@admin.com',
+      'admin@zahran.com'
+    ];
+    if (userToDelete.isAdmin || (userToDelete.email && adminEmails.includes(userToDelete.email.toLowerCase()))) {
+      throw new Error('Admin accounts cannot be deleted');
+    }
+
+    const email = userToDelete.email?.trim();
+    const uid = userToDelete.uid?.trim();
+    const projectId = userToDelete.projectId?.trim();
+    const projectName = userToDelete.projectName?.trim();
+
+    // 1. Delete from projects collection (by email, uid, and projectId)
+    if (email) {
+      try {
+        await deleteDoc(doc(db, COLLECTIONS.PROJECTS, email));
+        console.log(`🗑️ Deleted from projects collection: ${email}`);
+      } catch (err) {
+        console.warn(`Could not delete project doc for ${email}:`, err);
+      }
+    }
+    if (uid && uid !== email) {
+      try {
+        await deleteDoc(doc(db, COLLECTIONS.PROJECTS, uid));
+        console.log(`🗑️ Deleted from projects collection by uid: ${uid}`);
+      } catch (err) {
+        console.warn(`Could not delete project doc for uid ${uid}:`, err);
+      }
+    }
+    if (projectId && projectId !== email && projectId !== uid) {
+      try {
+        await deleteDoc(doc(db, COLLECTIONS.PROJECTS, projectId));
+        console.log(`🗑️ Deleted from projects collection by projectId: ${projectId}`);
+      } catch (err) {
+        console.warn(`Could not delete project doc for projectId ${projectId}:`, err);
+      }
+    }
+
+    // 2. Delete from users collection (by email and uid)
+    if (email) {
+      try {
+        await deleteDoc(doc(db, COLLECTIONS.USERS, email));
+        console.log(`🗑️ Deleted from users collection: ${email}`);
+      } catch (err) {
+        console.warn(`Could not delete user doc for ${email}:`, err);
+      }
+    }
+    if (uid && uid !== email) {
+      try {
+        await deleteDoc(doc(db, COLLECTIONS.USERS, uid));
+        console.log(`🗑️ Deleted from users collection by uid: ${uid}`);
+      } catch (err) {
+        console.warn(`Could not delete user doc for uid ${uid}:`, err);
+      }
+    }
+
+    // 3. Clean up subcollections under users/{email}
+    const subcollections = [
+      'vehicles', 'drivers', 'incidents', 'supervisors', 
+      'projectOfficers', 'campLabours', 'crewmen', 
+      'transfers', 'notifications', 'repairHistory'
+    ];
+    if (email) {
+      for (const sub of subcollections) {
+        try {
+          const subRef = collection(db, COLLECTIONS.USERS, email, sub);
+          const subSnap = await getDocs(subRef);
+          if (!subSnap.empty) {
+            const batch = writeBatch(db);
+            subSnap.forEach(d => batch.delete(d.ref));
+            await batch.commit();
+            console.log(`🗑️ Deleted subcollection docs in ${email}/${sub}`);
+          }
+        } catch (err) {
+          console.warn(`Error cleaning subcollection ${sub}:`, err);
+        }
+      }
+    }
+
+    // 4. Clean up any direct collections matching this project
+    const directCollections = [
+      'vehicles', 'drivers', 'incidents', 'supervisors', 
+      'projectOfficers', 'campLabours', 'crewmen', 
+      'transfers', 'repairHistory', 'notifications'
+    ];
+    for (const colName of directCollections) {
+      try {
+        const colRef = collection(db, colName);
+        const snap = await getDocs(colRef);
+        if (!snap.empty) {
+          const docsToDelete: any[] = [];
+          snap.forEach(d => {
+            const data = d.data();
+            const matches = 
+              (email && data.email === email) ||
+              (email && data.userId === email) ||
+              (uid && data.userId === uid) ||
+              (projectId && data.projectId === projectId) ||
+              (projectName && data.projectName === projectName) ||
+              (projectName && data.projectSite === projectName);
+            if (matches) {
+              docsToDelete.push(d.ref);
+            }
+          });
+
+          if (docsToDelete.length > 0) {
+            // Firestore batch limit is 500
+            for (let i = 0; i < docsToDelete.length; i += 400) {
+              const batch = writeBatch(db);
+              docsToDelete.slice(i, i + 400).forEach(ref => batch.delete(ref));
+              await batch.commit();
+            }
+            console.log(`🗑️ Deleted ${docsToDelete.length} records from direct collection: ${colName}`);
+          }
+        }
+      } catch (err) {
+        console.warn(`Error cleaning direct collection ${colName}:`, err);
+      }
+    }
+
+    // 5. Clean localStorage if this was cached
+    try {
+      const cached = localStorage.getItem('zahran_current_user');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed.email === email) {
+          localStorage.removeItem('zahran_current_user');
+        }
+      }
+    } catch (e) {
+      // Ignore localStorage errors
+    }
+
+    console.log(`✅ Project '${projectName}' successfully deleted from Firebase.`);
+    return { success: true };
+  } catch (error: any) {
+    console.error('❌ Error deleting project:', error);
+    return { success: false, error: error.message || 'Failed to delete project' };
+  }
+};
+

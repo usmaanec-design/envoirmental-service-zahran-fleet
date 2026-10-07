@@ -1,0 +1,13 @@
+https://envormental-service-zahran.web.app/
+https://envormental-service-zahran.web.app/dashboard
+https://envormental-service-zahran.web.app/vehicles
+https://envormental-service-zahran.web.app/drivers
+https://envormental-service-zahran.web.app/supervisors
+https://envormental-service-zahran.web.app/foremen
+https://envormental-service-zahran.web.app/labour
+https://envormental-service-zahran.web.app/manpower
+https://envormental-service-zahran.web.app/incidents
+https://envormental-service-zahran.web.app/reports
+https://envormental-service-zahran.web.app/transfer-vehicle
+https://envormental-service-zahran.web.app/login
+https://envormental-service-zahran.web.app/signup
